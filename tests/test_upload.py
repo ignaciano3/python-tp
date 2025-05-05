@@ -189,7 +189,8 @@ def test_upload_xxl(storages):
     client_storage, server_storage = storages
 
     xxl_file = client_storage / "xxl.bin"
-    text = generate_random_text(512) * 2 * 1024 * 1024  # 1GB
+    # el tp pide que el archivo sea de 5MB, pero por si acaso le pongo 10MB
+    text = generate_random_text(512) * 2 * 1024 * 10  # 10 MB
     xxl_file.write_text(text, encoding="utf-8")
 
     server_addr = (LOCALHOST, DEFAULT_PORT + 4)
@@ -207,7 +208,7 @@ def test_upload_xxl(storages):
 
     uploaded_file = server_storage / "xxl.bin"
 
-    client_thread.join(timeout=120)
+    client_thread.join(timeout=60*2) # 2 minutes
     server.stop()
     server_thread.join(timeout=2)
 
