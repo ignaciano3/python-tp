@@ -1,0 +1,36 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        { 
+            "name":"Debug Current File",
+            "type":"debugpy",
+            "request":"launch",
+            "program":"${file}",
+            "console":"integratedTerminal"
+        },
+        {
+            "name": "Launch server",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/src/start-server.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Launch upload",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/src/upload.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Launch download",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/src/download.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}
