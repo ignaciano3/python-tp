@@ -40,7 +40,11 @@ class Client:
             )
         elif self.operation == "download":
             self.operator = Download(
-                self.file_path, self.socket, (self.host, self.port)
+                self.file_path,
+                self.socket,
+                (self.host, self.port),
+                self.protocol,
+                self.logging_level,
             )
         else:
             raise ValueError("Invalid operation. Use 'upload' or 'download'.")

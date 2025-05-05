@@ -6,6 +6,9 @@ from lib.packages.DataPackage import DataPackage
 from lib.packages.AckPackage import AckPackage
 import logging
 from lib.utils.logger import create_logger
+from lib.utils.enums import PackageType, Protocol
+from lib.utils.constants import SEPARATOR
+from lib.packages.FinPackage import FinPackage
 
 
 class Download:
@@ -14,6 +17,7 @@ class Download:
         file_path: str,
         socket: Socket,
         server_addr: ADDR,
+        protocol = Protocol.STOP_WAIT,
         logging_level=logging.DEBUG,
     ) -> None:
         self.file_path = file_path
@@ -22,6 +26,7 @@ class Download:
         self.logger = create_logger(
             "client-download", "[CLIENT DOWNLOAD]", logging_level
         )
+        self.protocol = protocol
 
     def start(self) -> None:
         file_name = os.path.basename(self.file_path)
@@ -34,12 +39,16 @@ class Download:
         # 2. Esperar ACK
         self.socket.recv()
 
+        sequence_number = 0
         with open(self.file_path, "wb") as file:
             while True:
                 data, server_addr = self.socket.recv()
 
+                
                 # 3. Ver si es FIN
-                if data.startswith(b"FIN|"):
+                # Si el paquete es un FIN, se cierra la conexión
+                fin_packatge_type = str(PackageType.FIN.value) + SEPARATOR
+                if data.decode().startswith(fin_packatge_type):
                     self.logger.info("Received FIN package.")
                     self.send_ack()
                     break
@@ -51,11 +60,15 @@ class Download:
                 file.flush()
 
                 # 5. ACK por cada paquete
-                self.send_ack()
+                self.send_ack(sequence_number)
+                sequence_number ^= 1 # TODO: Implement a better sequence number handling
 
         self.logger.info(f"File {file_name} downloaded successfully.")
+
+        fin_package = FinPackage()
+        self.socket.sendto(fin_package, self.server_addr)
         self.socket.close()
 
-    def send_ack(self):
-        ack = AckPackage()
+    def send_ack(self, sequence_number: int = 0) -> None:
+        ack = AckPackage(sequence_number)
         self.socket.sendto(ack, self.server_addr)

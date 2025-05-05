@@ -109,6 +109,8 @@ class ServerRequestHandler:
         if file_descriptor is None:
             self.logger.error("No file descriptor available for download.")
             return
+        
+        sequence_number = 0
 
         try:
             while True:
@@ -116,12 +118,13 @@ class ServerRequestHandler:
                 if not chunk:
                     break  # End of file
 
-                data_package = DataPackage(chunk)
+                data_package = DataPackage(chunk, sequence_number)
                 self.socket.sendto(data_package, client_info.addr)
                 self.logger.debug(f"Sent chunk to {client_info.addr}")
 
                 # Wait for ACK
                 self.socket.recv()
+                sequence_number ^= 1  # TODO: Implement a better sequence number handling
 
             fin_package = FinPackage()
             self.socket.sendto(fin_package, client_info.addr)
