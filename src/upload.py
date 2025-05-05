@@ -1,10 +1,11 @@
 from lib.Client import Client
+from lib.utils.constants import CLIENT_STORAGE
 
 
-def upload(file_name: str, host: str, port: int = 8080) -> None:
-    client = Client("upload", file_name, host, port)
+def upload(file_path: str, host: str, port: int = 8080) -> None:
+    client = Client("upload", file_path, host, port)
     client.start()
 
 
 if __name__ == "__main__":
-    upload("xs.bin", "localhost", 8080)
+    upload(CLIENT_STORAGE + "/xs.bin", "localhost", 8080)

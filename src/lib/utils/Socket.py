@@ -7,9 +7,9 @@ from lib.packages.Package import Package
 
 
 class Socket:
-    def __init__(self) -> None:
+    def __init__(self, logging_level = logging.DEBUG) -> None:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.logger = create_logger("socket", "[SOCKET]", logging.DEBUG)
+        self.logger = create_logger("socket", "[SOCKET]", logging_level)
     
     def bind(self, host:str, port: int) -> None:
         self.logger.debug(f"Binding socket to {host}:{port}")

@@ -1,6 +1,11 @@
 from enum import Enum
 
 
+class Protocol(Enum):
+    STOP_WAIT = 0
+    SELECTIVE_REPEAT = 1
+
+
 class PackageType(Enum):
     INIT = "INIT"
     DATA = "DATA"
