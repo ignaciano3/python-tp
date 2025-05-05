@@ -7,11 +7,11 @@ class Protocol(Enum):
 
 
 class PackageType(Enum):
-    INIT = "INIT"
-    DATA = "DATA"
-    ACK = "ACK"
-    NACK = "NACK"
-    FIN = "FIN"
+    INIT = 0
+    DATA = 1
+    ACK = 2
+    NACK = 3
+    FIN = 4
 
     @staticmethod
     def from_bytes(data: bytes) -> "PackageType":
