@@ -38,7 +38,7 @@ def start_server(server_addr, server_storage):
     server_thread.start()
     return server, server_thread
 
-def start_client(file_path, server_addr: ADDR, client_num: str | int = "", start_now=True):
+def start_client(file_path: str, server_addr: ADDR, client_num: str | int = "", start_now=True):
     client = Client('upload', file_path, server_addr[0], server_addr[1], protocol=Protocol.STOP_WAIT, logging_level=logging.ERROR)
     client_thread = threading.Thread(target=client.start, name=f"ClientThread-{client_num}")
     if start_now: 

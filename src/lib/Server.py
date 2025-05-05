@@ -42,11 +42,19 @@ class Server:
             try:
                 request = self.socket.recv()
                 request_handler.handle_request(request)
+            except KeyboardInterrupt:
+                self.logger.info(
+                    "Interrupción del teclado recibida. Cerrando el servidor."
+                )
+                self.stop()
+                break
             except OSError as e:
                 if not self.running:
                     break
                 self.logger.error(f"Error receiving data: {e}")
                 break
+            except Exception as e:
+                self.logger.error(f"Unexpected error: {e}")
 
     def stop(self) -> None:
         self.socket.close()

@@ -23,7 +23,7 @@ def storages(tmp_path) -> tuple[Path, Path]:
 
     return (client_storage, server_storage)
 
-def start_client(file_path, server_addr: ADDR, client_num: str | int = "", start_now=True):
+def start_client(file_path: str, server_addr: ADDR, client_num: str | int = "", start_now=True):
     client = Client('download', file_path, server_addr[0], server_addr[1], protocol=Protocol.STOP_WAIT, logging_level=logging.ERROR)
     client_thread = threading.Thread(target=client.start, name=f"ClientThread-{client_num}")
     if start_now: 
@@ -53,13 +53,14 @@ def test_download_xs(storages):
     server , server_thread = start_server(server_addr, server_storage)
 
     # Start the client
-    client , client_thread = start_client(str(xs_file), server_addr)
+    downloaded_file = client_storage / "xs.bin"
+    client , client_thread = start_client(str(downloaded_file), server_addr)
 
     client_thread.join(timeout=1)
     server.stop()
     server_thread.join(timeout=1)
 
-    downloaded_file = client_storage / "xs.bin"
+    
 
     assert len(list(client_storage.iterdir())) == 1 # Chequeo que haya un archivo
     assert downloaded_file.exists(follow_symlinks=False)
@@ -82,13 +83,12 @@ def test_download_md(storages):
     server, server_thread = start_server(server_addr, server_storage)
 
     # Start the client
-    client, client_thread = start_client(str(md_file), server_addr)
+    downloaded_file = client_storage / "md.bin"
+    client, client_thread = start_client(str(downloaded_file), server_addr)
 
     client_thread.join(timeout=5)
     server.stop()
     server_thread.join(timeout=5)
-
-    downloaded_file = client_storage / "md.bin"
 
     assert len(list(client_storage.iterdir())) == 1 # Chequeo que haya un archivo
     assert downloaded_file.exists(follow_symlinks=False)
@@ -108,13 +108,12 @@ def test_download_lg(storages):
     server , server_thread = start_server(server_addr, server_storage)
 
     # Start the client
-    client, client_thread = start_client(str(lg_file), server_addr)
+    downloaded_file = client_storage / "lg.bin"
+    client, client_thread = start_client(str(downloaded_file), server_addr)
 
     client_thread.join(timeout=20)
     server.stop()
     server_thread.join(timeout=20)
-    
-    downloaded_file = client_storage / "lg.bin"
 
     assert len(list(client_storage.iterdir())) == 1 # Chequeo que haya un archivo
     assert downloaded_file.exists(follow_symlinks=False)
@@ -173,9 +172,8 @@ def test_download_xl(storages):
     server, server_thread = start_server(server_addr, server_storage)
 
     # Start the client
-    client, client_thread = start_client(str(md_file), server_addr)
-
     downloaded_file = client_storage / "xl.bin"
+    client, client_thread = start_client(str(downloaded_file), server_addr)
 
     client_thread.join(timeout=20)
     server.stop()
