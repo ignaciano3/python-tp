@@ -57,7 +57,7 @@ class ServerRequestHandler:
         client_info = self.clients[addr_str]
 
         package_info = data.split(SEPARATOR.encode("utf-8"))
-        package_type = package_info[0].decode("utf-8")
+        package_type = int(package_info[0].decode("utf-8"))
         client_info.last_package_type = PackageType(package_type)
 
         if client_info.last_package_type == PackageType.INIT:
