@@ -56,7 +56,6 @@ class ServerRequestHandler:
                     file_path,
                     os.O_RDONLY,
                 )
-
             self.clients[addr_str] = ClientInfo(
                 addr=addr,
                 operation=package.operation,

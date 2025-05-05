@@ -4,38 +4,57 @@ from lib.utils.Socket import Socket
 from lib.utils.types import ADDR
 from lib.packages.InitPackage import UploadHeader
 from lib.utils.logger import create_logger
-from lib.packages.DataPackage import DataPackage
 from lib.packages.FinPackage import FinPackage
 from lib.utils.constants import BUFSIZE
+from lib.protocols.stop_and_wait import StopAndWaitProtocol
+from lib.protocols.selective_repeat import SelectiveRepeatProtocol
+
 
 class Upload:
-    def __init__(self, file_path: str, socket: Socket, server_addr: ADDR, logging_level= logging.DEBUG) -> None:
+    def __init__(
+        self,
+        file_path: str,
+        socket: Socket,
+        server_addr: ADDR,
+        protocol: str,
+        logging_level=logging.DEBUG,
+    ) -> None:
         self.file_path = file_path
         self.socket = socket
         self.server_addr = server_addr
+        self.protocol = protocol
         self.logger = create_logger("client", "[CLIENT]", logging_level)
-    
+        self.sequence_number = 0
+
+        if protocol == "STOP_AND_WAIT":
+            self.protocol_handler = StopAndWaitProtocol(socket, server_addr)
+        elif protocol == "SELECTIVE_REPEAT":
+            self.protocol_handler = SelectiveRepeatProtocol(socket, server_addr)
+        else:
+            raise ValueError("Unsupported protocol")
+
     def start(self) -> None:
         file_name = os.path.basename(self.file_path)
 
+        # Enviar el header de la carga de archivo
         header = UploadHeader(file_name)
         self.socket.sendto(header, self.server_addr)
-        self.socket.recv()
-        
+        self.socket.recv()  # Esperar respuesta de servidor
+
         with open(self.file_path, "rb") as file:
+            chunks = []
             while True:
                 data = file.read(BUFSIZE - 50)
                 if not data:
-                    break
-                data_package = DataPackage(data)
-                self.socket.sendto(data_package, self.server_addr)
-                self.socket.recv()
+                    break  # Fin del archivo
+                chunks.append(data)
+
+                self.protocol_handler.send(data)  # Enviar un chunk
 
         fin_package = FinPackage()
         self.socket.sendto(fin_package, self.server_addr)
 
-        self.socket.recv()
-
+        self.socket.recv()  # Esperar confirmación del servidor
         self.socket.close()
-        self.logger.info(f"File {file_name} uploaded successfully.")
 
+        self.logger.info(f"File {file_name} uploaded successfully.")
