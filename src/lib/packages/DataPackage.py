@@ -11,4 +11,6 @@ class DataPackage(Package):
         super().__init__(PackageType.DATA, data)
 
     def to_bytes(self) -> bytes:
-        return f"{self.type.value}{SEPARATOR}{self.data}".encode("utf-8")
+        if self.data is None:
+            raise ValueError("Data is not set")
+        return f"{self.type.value}{SEPARATOR}{self.data.decode("utf-8")}".encode("utf-8")
