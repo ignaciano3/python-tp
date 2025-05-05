@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from io import BufferedRandom
 import logging
 import os
 from lib.utils.types import REQUEST
@@ -20,6 +21,7 @@ class ClientInfo:
     file_descriptor: int
     last_package_type: PackageType
     filename: str
+    file: BufferedRandom | None = None
 
 
 class ServerRequestHandler:
@@ -95,9 +97,13 @@ class ServerRequestHandler:
     def handle_upload_request(self, data: bytes, client_info: ClientInfo):
         _, seq_number, package_data = data.split(SEPARATOR.encode("utf-8"))
 
-        # TODO: Ver como hacer para no tener que abrir el archivo cada vez que se recibe un paquete
-        with open(f"{self.server_storage}/{client_info.filename}", "ab+") as file:
-            file.write(package_data)
+        if client_info.file is None:
+            file = open(f"{self.server_storage}/{client_info.filename}", "ab+")
+            client_info.file = file
+        else:
+            file = client_info.file
+        
+        file.write(package_data)
 
         self.logger.info(f"File written successfully from {client_info.addr}")
 
@@ -150,6 +156,11 @@ class ServerRequestHandler:
         self.logger.warning(f"File transfer finished from {client_info.addr}")
         self.send_ack(client_info.addr)
         os.close(client_info.file_descriptor)
+        
+        if client_info.file:
+            client_info.file.close()
+            client_info.file = None
+        
         del self.clients[f"{client_info.addr[0]}:{client_info.addr[1]}"]
 
     def send_ack(self, addr: ADDR, seq_num: int = 0):

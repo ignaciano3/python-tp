@@ -241,7 +241,7 @@ def test_upload_xl(storages):
 
     uploaded_file = server_storage / "xl.bin"
 
-    client_thread.join(timeout=30)
+    client_thread.join(timeout=5)
     server.stop()
     server_thread.join(timeout=10)
 
@@ -282,7 +282,7 @@ def test_concurrent_upload_xl(storages):
         client_thread.start()
 
     for client_thread in client_threads:
-        client_thread.join()
+        client_thread.join(15)
 
     for client_thread in client_threads:
         assert client_thread.is_alive() is False
