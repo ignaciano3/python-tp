@@ -78,6 +78,7 @@ class ServerRequestHandler:
             if client_info.operation == "download":
                 self.handle_download_request(data, client_info)
         elif client_info.last_package_type == PackageType.DATA:
+            
             self.handle_data_request(data, client_info)
         elif client_info.last_package_type == PackageType.ACK:
             if client_info.operation == "download":
@@ -92,13 +93,15 @@ class ServerRequestHandler:
             )
 
     def handle_upload_request(self, data: bytes, client_info: ClientInfo):
+        _, seq_number, package_data = data.split(SEPARATOR.encode("utf-8"))
+
         # TODO: Ver como hacer para no tener que abrir el archivo cada vez que se recibe un paquete
         with open(f"{self.server_storage}/{client_info.filename}", "ab+") as file:
-            file.write(data.split(SEPARATOR.encode("utf-8"))[1])
+            file.write(package_data)
 
         self.logger.info(f"File written successfully from {client_info.addr}")
 
-        self.send_ack(client_info.addr)
+        self.send_ack(client_info.addr, int(seq_number))
 
     def handle_download_request(self, data: bytes, client_info: ClientInfo):
         file_descriptor = client_info.file_descriptor
@@ -141,12 +144,12 @@ class ServerRequestHandler:
             )
 
     def handle_finish_request(self, client_info: ClientInfo):
-        self.logger.info(f"File transfer finished from {client_info.addr}")
+        self.logger.warning(f"File transfer finished from {client_info.addr}")
         self.send_ack(client_info.addr)
         os.close(client_info.file_descriptor)
         del self.clients[f"{client_info.addr[0]}:{client_info.addr[1]}"]
 
-    def send_ack(self, addr: ADDR):
-        ack_package = AckPackage()
+    def send_ack(self, addr: ADDR, seq_num: int = 0):
+        ack_package = AckPackage(seq_num)
         self.socket.sendto(ack_package, addr)
         self.logger.info(f"ACK sent to {addr}")

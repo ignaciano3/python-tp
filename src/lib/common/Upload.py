@@ -8,6 +8,7 @@ from lib.packages.FinPackage import FinPackage
 from lib.utils.constants import BUFSIZE
 from lib.protocols.stop_and_wait import StopAndWaitProtocol
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
+from lib.utils.enums import Protocol
 
 
 class Upload:
@@ -16,7 +17,7 @@ class Upload:
         file_path: str,
         socket: Socket,
         server_addr: ADDR,
-        protocol: str,
+        protocol = Protocol.STOP_WAIT,
         logging_level=logging.DEBUG,
     ) -> None:
         self.file_path = file_path
@@ -26,9 +27,9 @@ class Upload:
         self.logger = create_logger("client", "[CLIENT]", logging_level)
         self.sequence_number = 0
 
-        if protocol == "STOP_AND_WAIT":
+        if protocol.value == Protocol.STOP_WAIT.value:
             self.protocol_handler = StopAndWaitProtocol(socket, server_addr)
-        elif protocol == "SELECTIVE_REPEAT":
+        elif protocol.value == Protocol.SELECTIVE_REPEAT.value:
             self.protocol_handler = SelectiveRepeatProtocol(socket, server_addr)
         else:
             raise ValueError("Unsupported protocol")

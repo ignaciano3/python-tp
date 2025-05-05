@@ -27,6 +27,4 @@ class StopAndWaitProtocol:
         if ack_package.sequence_number != self.sequence_number:
             self.send(data)  # Retransmite si el número de secuencia no coincide
         else:
-            self.sequence_number += (
-                1  # Solo avanza el número de secuencia si se recibe el ACK correcto
-            )
+            self.sequence_number ^= 1

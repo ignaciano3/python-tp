@@ -30,10 +30,18 @@ class Client:
         self.client_storage = client_storage
         self.protocol = protocol
 
-        if self.operation == 'upload':
-            self.operator = Upload(self.file_path, self.socket, (self.host, self.port), self.logging_level)
-        elif self.operation == 'download':
-            self.operator = Download(self.file_path, self.socket, (self.host, self.port))
+        if self.operation == "upload":
+            self.operator = Upload(
+                self.file_path,
+                self.socket,
+                (self.host, self.port),
+                self.protocol,
+                self.logging_level,
+            )
+        elif self.operation == "download":
+            self.operator = Download(
+                self.file_path, self.socket, (self.host, self.port)
+            )
         else:
             raise ValueError("Invalid operation. Use 'upload' or 'download'.")
 
