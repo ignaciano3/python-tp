@@ -15,6 +15,11 @@ class Package:
     def set_data(self, data: bytes) -> None:
         self.data = data
 
+    def get_checksum(self) -> int:
+        if self.data is None:
+            return 0
+        return sum(self.data) % 256
+
     def to_bytes(self) -> bytes:
         raise NotImplementedError("Subclasses should implement this method")
 
