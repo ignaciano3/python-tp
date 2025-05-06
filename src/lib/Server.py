@@ -24,9 +24,16 @@ class Server:
         self.server_storage = server_storage
         self.protocol = protocol
 
+    def bind_socket(self) -> None:
+        try:
+            self.socket.bind(self.host, self.port)
+        except OSError as e:
+            self.logger.error(f"Error binding socket: {e}")
+            raise
+
     def start(self) -> None:
         self.running = True
-        self.socket.bind(self.host, self.port)
+        self.bind_socket()
         self.logger.info(f"Server started on {self.host}:{self.port}")
 
         request_handler = ServerRequestHandler(self.server_storage, self.socket, self.logging_level)

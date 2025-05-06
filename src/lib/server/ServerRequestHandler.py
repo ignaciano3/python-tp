@@ -71,7 +71,7 @@ class ServerRequestHandler:
         client_info = self.clients[addr_str]
 
         package_info = data.split(SEPARATOR.encode("utf-8"))
-        package_type = package_info[0].decode("utf-8")
+        package_type = int(package_info[0].decode("utf-8"))
         client_info.last_package_type = PackageType(package_type)
 
         if client_info.last_package_type == PackageType.INIT:
@@ -93,11 +93,11 @@ class ServerRequestHandler:
             )
 
     def handle_upload_request(self, data: bytes, client_info: ClientInfo):
+        # TODO: Ver como hacer para no tener que abrir el archivo cada vez que se recibe un paquete
         with open(f"{self.server_storage}/{client_info.filename}", "ab+") as file:
             file.write(data.split(SEPARATOR.encode("utf-8"))[1])
-            file.flush()
 
-        self.logger.info(f"File uploaded successfully from {client_info.addr}")
+        self.logger.info(f"File written successfully from {client_info.addr}")
 
         self.send_ack(client_info.addr)
 

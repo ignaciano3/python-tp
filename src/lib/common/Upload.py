@@ -24,7 +24,7 @@ class Upload:
         
         with open(self.file_path, "rb") as file:
             while True:
-                data = file.read(BUFSIZE - 50)
+                data = file.read(BUFSIZE - 8)
                 if not data:
                     break
                 data_package = DataPackage(data)
