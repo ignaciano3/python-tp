@@ -1,9 +1,7 @@
-from dataclasses import dataclass
-from io import BufferedRandom
 import logging
 import os
 from lib.utils.types import REQUEST
-from lib.utils.constants import OPERATION, SEPARATOR, BUFSIZE
+from lib.utils.constants import SEPARATOR, BUFSIZE
 from lib.utils.types import ADDR
 from lib.packages.InitPackage import InitPackage
 from lib.utils.enums import PackageType
@@ -12,16 +10,23 @@ from lib.utils.Socket import Socket
 from lib.packages.AckPackage import AckPackage
 from lib.packages.DataPackage import DataPackage
 from lib.packages.FinPackage import FinPackage
+from lib.utils.constants import Protocol
+from lib.protocols.stop_and_wait import StopAndWaitProtocol
+from lib.protocols.selective_repeat import SelectiveRepeatProtocol
+from lib.server.client_info import ClientInfo
+
+PROTOCOL = Protocol.STOP_WAIT
 
 
-@dataclass
-class ClientInfo:
-    addr: ADDR
-    operation: OPERATION
-    file_descriptor: int
-    last_package_type: PackageType
-    filename: str
-    file: BufferedRandom | None = None
+# @dataclass
+# class ClientInfo:
+#     addr: ADDR
+#     operation: OPERATION
+#     file_descriptor: int
+#     last_package_type: PackageType
+#     filename: str
+#     file: BufferedRandom | None = None
+#     protocol_handler: object | None = None
 
 
 class ServerRequestHandler:
@@ -58,12 +63,22 @@ class ServerRequestHandler:
                     file_path,
                     os.O_RDONLY,
                 )
+            self.protocol = PROTOCOL  ##########################################cambiar
+
+            if self.protocol == Protocol.STOP_WAIT:
+                handler = StopAndWaitProtocol(self.socket, addr)
+            elif self.protocol == Protocol.SELECTIVE_REPEAT:
+                handler = SelectiveRepeatProtocol(self.socket, addr)
+            else:
+                raise ValueError("Unknown protocol")
+
             self.clients[addr_str] = ClientInfo(
                 addr=addr,
                 operation=package.operation,
                 file_descriptor=file_descriptor,
                 last_package_type=PackageType.INIT,
                 filename=package.file_name,
+                protocol_handler=handler,
             )
             self.logger.info(
                 f"New client connected: {addr_str} with operation {package.operation}"
@@ -78,13 +93,17 @@ class ServerRequestHandler:
         if client_info.last_package_type == PackageType.INIT:
             self.send_init_response(client_info)
             if client_info.operation == "download":
-                self.handle_download_request(data, client_info)
+                # self.handle_download_request(data, client_info)
+                client_info.protocol_handler.handle_download(client_info)
+
         elif client_info.last_package_type == PackageType.DATA:
-            
-            self.handle_data_request(data, client_info)
+            client_info.protocol_handler.handle_data(data, client_info)
+            # self.handle_data_request(data, client_info)
+
         elif client_info.last_package_type == PackageType.ACK:
             if client_info.operation == "download":
-                print("[REQUEST HANDLER] ACK received during download (ignored)")
+                client_info.protocol_handler.handle_ack(data, client_info)
+                # print("[REQUEST HANDLER] ACK received during download (ignored)")
             else:
                 print("[REQUEST HANDLER] Unexpected ACK during upload (ignored)")
         elif client_info.last_package_type == PackageType.FIN:
@@ -102,7 +121,7 @@ class ServerRequestHandler:
             client_info.file = file
         else:
             file = client_info.file
-        
+
         file.write(package_data)
 
         self.logger.info(f"File written successfully from {client_info.addr}")
@@ -115,7 +134,7 @@ class ServerRequestHandler:
         if file_descriptor is None:
             self.logger.error("No file descriptor available for download.")
             return
-        
+
         sequence_number = 0
 
         try:
@@ -130,7 +149,9 @@ class ServerRequestHandler:
 
                 # Wait for ACK
                 self.socket.recv()
-                sequence_number ^= 1  # TODO: Implement a better sequence number handling
+                sequence_number ^= (
+                    1  # TODO: Implement a better sequence number handling
+                )
 
             fin_package = FinPackage()
             self.socket.sendto(fin_package, client_info.addr)
@@ -156,11 +177,11 @@ class ServerRequestHandler:
         self.logger.warning(f"File transfer finished from {client_info.addr}")
         self.send_ack(client_info.addr)
         os.close(client_info.file_descriptor)
-        
+
         if client_info.file:
             client_info.file.close()
             client_info.file = None
-        
+
         del self.clients[f"{client_info.addr[0]}:{client_info.addr[1]}"]
 
     def send_ack(self, addr: ADDR, seq_num: int = 0):

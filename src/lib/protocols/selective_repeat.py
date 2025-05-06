@@ -69,3 +69,82 @@ class SelectiveRepeatProtocol:
                     break  # Fin del archivo
                 # Enviar el paquete si hay espacio en la ventana
                 self.send(data)
+
+    # Dentro de la clase SelectiveRepeatProtocol en el cliente
+
+    def __init__(self, socket: Socket, send_to_addr: ADDR, window_size=5):
+        # ... (inicialización existente) ...
+        self.window_size = window_size
+        self.receive_buffer = {}  # Almacenar paquetes fuera de orden
+        self.expected_sequence_number = 0
+
+    def receive(self) -> bytes | None:
+        while True:
+            try:
+                data, _ = self.socket.recv()
+                received_package_type = int(data[:1].decode())
+
+                if received_package_type == 4:  # PackageType.FIN.value
+                    self.logger.info("Received FIN, sending ACK.")
+                    ack = AckPackage()
+                    self.socket.sendto(ack, self.send_to_addr)
+                    return data
+                elif received_package_type == 2:  # PackageType.DATA.value
+                    data_package = DataPackage.from_bytes(data)
+                    seq_num = data_package.sequence_number
+
+                    if (
+                        self.expected_sequence_number
+                        <= seq_num
+                        < self.expected_sequence_number + self.window_size
+                    ):
+                        self.logger.debug(
+                            f"Received data packet with sequence number: {seq_num}"
+                        )
+                        self.receive_buffer[seq_num] = data_package.data
+                        # Enviar ACK selectivo (SACK) indicando qué paquetes se recibieron
+                        sack = AckPackage(
+                            seq_num
+                        )  # En un Selective Repeat real, esto sería más complejo
+                        self.socket.sendto(sack, self.send_to_addr)
+
+                        # Entregar los paquetes en orden si están disponibles
+                        while self.expected_sequence_number in self.receive_buffer:
+                            data_to_deliver = self.receive_buffer.pop(
+                                self.expected_sequence_number
+                            )
+                            self.expected_sequence_number += 1
+                            # Aquí necesitas reconstruir el paquete completo con el tipo y número de secuencia
+                            return (
+                                str(PackageType.DATA.value).encode()
+                                + SEPARATOR.encode()
+                                + str(data_package.sequence_number).encode()
+                                + SEPARATOR.encode()
+                                + data_to_deliver
+                            )
+                        return None  # Esperar más paquetes para entregar en orden
+                    elif seq_num < self.expected_sequence_number:
+                        self.logger.debug(
+                            f"Received duplicate packet with sequence number: {seq_num}. Sending ACK."
+                        )
+                        ack = AckPackage(seq_num)
+                        self.socket.sendto(ack, self.send_to_addr)
+                        return None
+                    else:
+                        self.logger.warning(
+                            f"Received packet with sequence number {seq_num} outside the window."
+                        )
+                        # Podrías enviar un NACK o descartar el paquete según la estrategia
+                        return None
+                else:
+                    self.logger.warning(
+                        f"Received unknown package type: {received_package_type}"
+                    )
+                    return None
+
+            except TimeoutError:
+                self.logger.warning("Timeout while waiting for data.")
+                return None
+            except Exception as e:
+                self.logger.error(f"Error during receive: {e}")
+                return None
