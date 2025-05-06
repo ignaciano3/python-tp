@@ -50,12 +50,8 @@ class Download:
 
         self.send_ack(0)
 
-        finished = False
         with open(self.file_path, "wb") as file:
-            while not finished:
-                package, _ = self.socket.recv()
-
-                finished = self.protocol_handler.receive(package, file)
+            self.protocol_handler.receive(file)
 
         self.logger.info(f"File {file_name} downloaded successfully.")
 

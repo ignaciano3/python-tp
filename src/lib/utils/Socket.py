@@ -26,23 +26,18 @@ class Socket:
         self.logger.debug(f"Receiving data with buffer size {bufsize}")
         try:
             # TODO------- HAGO QUE FALLEN EL 100% DE LOS PAQUETES -------
-            random_number = random.randint(0, 100)
-
-            if random_number < 10:
-                self.logger.debug("Simulating packet loss")
-                raise socket.error("Simulated packet loss")
- 
             received = self.socket.recvfrom(bufsize)
+            
             package_raw = received[0]
             package = FactoryPackage.recover_package(package_raw)
 
             return (package, received[1])
-        except (PackageErr, ChecksumErr) as e:
-             self.logger.error(f"Error en el paquete recibido: {e}")
-             raise
-        except Exception:
-             self.logger.exception("Excepción inesperada en recv:")
-             raise
+        except (PackageErr, ChecksumErr, TimeoutError) as e:
+            self.logger.error(f"Error en el paquete recibido: {e}")
+            raise e
+        except Exception as e:
+            self.logger.exception("Excepción inesperada en recv:")
+            raise e
 
     def close(self) -> None:
         self.logger.debug("Closing socket")

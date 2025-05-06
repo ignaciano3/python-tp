@@ -46,13 +46,7 @@ class Upload:
         ## Protocolo ///
 
         with open(self.file_path, "rb") as file:
-            while True:
-                data = file.read(BUFSIZE - 8)
-                if not data:
-                    break  # Fin del archivo
-
-                data_package = DataPackage(data, self.protocol_handler.sequence_number)
-                self.protocol_handler.send(data_package)
+            self.protocol_handler.send(file)
 
         fin_package = FinPackage()
         self.socket.sendto(fin_package, self.server_addr)

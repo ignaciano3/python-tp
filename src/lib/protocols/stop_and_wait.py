@@ -1,9 +1,11 @@
-from io import BufferedWriter
+from io import BufferedReader, BufferedWriter
 from lib.packages.AckPackage import AckPackage
 from lib.utils.types import ADDR
 from lib.utils.Socket import Socket
 from lib.packages.Package import Package
 from lib.utils.enums import PackageType
+from lib.packages.DataPackage import DataPackage
+from lib.utils.constants import BUFSIZE
 
 
 class StopAndWaitProtocol:
@@ -13,7 +15,16 @@ class StopAndWaitProtocol:
         self.sequence_number = 0
         self.tries = 0
 
-    def send(self, package: Package) -> None:
+    def send(self, file: BufferedReader) -> None:
+        while True:
+            data = file.read(BUFSIZE - 8)
+            if not data:
+                break  # Fin del archivo
+
+            data_package = DataPackage(data, self.sequence_number)
+            self._send_aux(data_package)
+
+    def _send_aux(self, package: Package) -> None:
         if self.tries >= 5:
             print("Número máximo de reintentos alcanzado. Abortando.")
             raise Exception("Número máximo de reintentos alcanzado. Abortando.")
@@ -22,30 +33,39 @@ class StopAndWaitProtocol:
         self.socket.sendto(package, self.server_addr)
 
         # Espera la confirmación (ACK)
+        ack = None
         try:
             self.socket.settimeout(10)  # Timeout de 1 segundo
             ack, _ = self.socket.recv()
         except TimeoutError:
             print("Timeout alcanzado. Reintentando...")
             self.tries += 1
-            self.send(package)
+            self._send_aux(package)
         except Exception as e:
             print(f"Error al recibir el ACK: {e}")
             self.tries += 1
-            self.send(package)
+            self._send_aux(package)
 
         if not isinstance(ack, AckPackage):
             return
 
         # Si el número de secuencia no coincide, vuelve a enviar el paquete
-        if  ack.sequence_number != self.sequence_number:
+        if ack.sequence_number != self.sequence_number:
             self.tries += 1
-            self.send(package)  # Retransmite si el número de secuencia no coincide
+            self._send_aux(package)  # Retransmite si el número de secuencia no coincide
         else:
             self.tries = 0
             self.sequence_number ^= 1
 
-    def receive(self, package: Package, file: BufferedWriter) -> bool:
+    def receive(self, file: BufferedWriter) -> None:
+        finished = False
+
+        while not finished:
+            package, _ = self.socket.recv()
+
+            finished = self._receive_aux(package, file)
+
+    def _receive_aux(self, package: Package, file: BufferedWriter) -> bool:           
         # 3. Recibe el paquete del socket
         if package.type == PackageType.FIN or package.data is None:
             file.flush()

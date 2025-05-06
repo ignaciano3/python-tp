@@ -1,6 +1,6 @@
+from io import BufferedReader, BufferedWriter
 from lib.utils.Socket import Socket
 from lib.utils.types import ADDR
-from lib.packages.Package import Package
 
 
 class SelectiveRepeatProtocol:
@@ -14,10 +14,10 @@ class SelectiveRepeatProtocol:
         self.window_end = 0  # El final de la ventana de envío
         self.sequence_number = 0  # El número de secuencia para los paquetes
 
-    def send(self, package: Package) -> None:
+    def send(self, file: BufferedReader) -> None:
         pass
 
-    def receive(self, package, file):
+    def receive(self, file: BufferedWriter):
         pass
 
     """
