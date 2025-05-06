@@ -26,6 +26,17 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Launch upload selective repeat",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${cwd}/src/upload.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--protocol", "1",
+            ],
+            "purpose": ["debug-in-terminal"]
+        },
+        {
             "name": "Launch download",
             "type": "debugpy",
             "request": "launch",

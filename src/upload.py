@@ -1,3 +1,4 @@
+from typing import Literal
 from lib.Client import Client
 import logging
 from lib.utils.enums import Protocol
@@ -13,7 +14,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     host: str = args.host
     port: int = args.port
-    protocol: Protocol = args.protocol
+    protocol: Literal[0, 1] = args.protocol
     file_path: str = args.src
 
     if args.verbose:
@@ -23,4 +24,4 @@ if __name__ == "__main__":
     else:
         logging_level = logging.INFO
 
-    upload(file_path, host, port, protocol, logging_level)
+    upload(file_path, host, port, Protocol(protocol), logging_level)

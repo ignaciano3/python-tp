@@ -42,7 +42,7 @@ parser.add_argument("-n", "--name", action="store_true", help="file name")
 parser.add_argument(
     "-r",
     "--protocol",
-    action="store_true",
     help="error recovery protocol",
-    default=Protocol.STOP_WAIT,
+    type=int,
+    default=Protocol.STOP_WAIT.value,
 )
