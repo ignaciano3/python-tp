@@ -5,6 +5,7 @@ from lib.utils.constants import BUFSIZE
 from lib.utils.logger import create_logger
 from lib.packages.Package import Package
 from lib.packages.FactoryPackage import FactoryPackage
+from lib.utils.package_error import PackageErr, ChecksumErr
 
 
 class Socket:
@@ -22,11 +23,18 @@ class Socket:
 
     def recv(self, bufsize=BUFSIZE) -> tuple[Package, tuple[str, int]]:
         self.logger.debug(f"Receiving data with buffer size {bufsize}")
-        received = self.socket.recvfrom(bufsize)
-        package_raw = received[0]
-        package = FactoryPackage.recover_package(package_raw)
+        try:
+            received = self.socket.recvfrom(bufsize)
+            package_raw = received[0]
+            package = FactoryPackage.recover_package(package_raw)
 
-        return (package, received[1])
+            return (package, received[1])
+        except (PackageErr, ChecksumErr) as e:
+             self.logger.error(f"Error en el paquete recibido: {e}")
+             raise
+        except Exception:
+             self.logger.exception("Excepción inesperada en recv:")
+             raise
 
     def close(self) -> None:
         self.logger.debug("Closing socket")
