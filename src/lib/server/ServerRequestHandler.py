@@ -32,6 +32,7 @@ class ServerRequestHandler:
         self, server_storage: str, socket: Socket, logging_level=logging.DEBUG
     ) -> None:
         self.clients: dict[str, ClientInfo] = {}
+        self.retrys = 0
         self.server_storage = server_storage
         self.socket = socket
         self.logger = create_logger(
@@ -68,7 +69,10 @@ class ServerRequestHandler:
             self.handle_upload_request(package, client_info)
         elif isinstance(package, AckPackage):
             if client_info.operation == "download":
-                self.handle_download_request(package, client_info)
+                try:
+                    self.handle_download_request(package, client_info)
+                except TimeoutError:
+                    self.handle_finish_request(client_info)
             else:
                 self.logger.info(
                     "[REQUEST HANDLER] Unexpected ACK during upload (ignored)"
@@ -81,7 +85,6 @@ class ServerRequestHandler:
             )
 
     def handle_upload_request(self, package: DataPackage, client_info: ClientInfo):
-        print("DESDE HANDLE UPLOAD REQUEST",package.valid)
         if not package.valid:
             self.send_nack(client_info.addr, int(package.sequence_number))
             return
@@ -98,19 +101,30 @@ class ServerRequestHandler:
 
         self.send_ack(client_info.addr, int(package.sequence_number))
 
-    def handle_download_request(self, package: AckPackage, client_info: ClientInfo):
-        if client_info.file is None:
-            file = open(f"{self.server_storage}/{client_info.filename}", "rb+")
-            client_info.file = file
-        else:
-            file = client_info.file
-
-        chunk = file.read(BUFSIZE - 50)
-
-        if not chunk:
-            self.logger.info(f"File transfer finished for {client_info.addr}")
+    def handle_download_request(self, package: AckPackage, client_info: ClientInfo): ## manejo
+        if self.retrys == 5:
             self.send_fin(client_info.addr)
             return
+        
+        if package.valid:
+            if client_info.file is None:
+                file = open(f"{self.server_storage}/{client_info.filename}", "rb+")
+                client_info.file = file
+            else:
+                file = client_info.file
+
+            chunk = file.read(BUFSIZE - 50)
+            self.last_chunk = chunk
+            self.retrys = 0
+            if not chunk:
+                self.logger.info(f"File transfer finished for {client_info.addr}")
+                self.send_fin(client_info.addr)
+                return
+
+        else:
+            print(f"reintentando paquete,try {self.retrys}")
+            chunk = self.last_chunk
+            self.retrys += 1
 
         data_package = DataPackage(chunk, client_info.seq_number)
         self.socket.sendto(data_package, client_info.addr)
@@ -145,25 +159,3 @@ class ServerRequestHandler:
         self.logger.info(f"FIN sent to {addr}")
 
 
-"""
-
-        try:
-            while True:
-                chunk = os.read(file_descriptor, BUFSIZE - 50)
-                if not chunk:
-                    break  # End of file
-
-                data_package = DataPackage(chunk, sequence_number)
-                self.socket.sendto(data_package, client_info.addr)
-                self.logger.debug(f"Sent chunk to {client_info.addr}")
-
-                # Wait for ACK
-                self.socket.recv()
-                sequence_number ^= 1  # TODO: Implement a better sequence number handling
-
-            fin_package = FinPackage()
-            self.socket.sendto(fin_package, client_info.addr)
-            self.logger.info(f"File sent successfully to {client_info.addr}")
-
-        except Exception as e:
-            self.logger.error(f"Error while handling download request: {e}")"""

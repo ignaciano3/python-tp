@@ -51,10 +51,9 @@ class StopAndWaitProtocol:
         if not isinstance(ack, AckPackage):
             return
 
-        # Si el número de secuencia no coincide, vuelve a enviar el paquete
         if ack.sequence_number != self.sequence_number:
             self.tries += 1
-            self._send_aux(package)  # Retransmite si el número de secuencia no coincide
+            self._send_aux(package)  
         else:
             self.tries = 0
             self.sequence_number ^= 1
@@ -64,14 +63,17 @@ class StopAndWaitProtocol:
 
         while not finished:
             package, _ = self.socket.recv()
-
             finished = self._receive_aux(package, file)
 
     def _receive_aux(self, package: Package, file: BufferedWriter) -> bool:           
-        # 3. Recibe el paquete del socket
         if package.type == PackageType.FIN or package.data is None:
             file.flush()
             return True
+        
+        if not package.valid:
+            ack_package = AckPackage(self.sequence_number,False)
+            self.socket.sendto(ack_package, self.server_addr)
+            return False
 
         if package.type != PackageType.DATA:
             raise Exception("El paquete recibido no es un DataPackage.")

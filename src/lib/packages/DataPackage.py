@@ -16,7 +16,7 @@ class DataPackage(Package):
         # Codifica como: DATA|<sequence_number>|<payload>
         checksum = self.get_checksum()
         return (
-            f"{self.type.value}{SEPARATOR}{self.sequence_number}{SEPARATOR}{0}{SEPARATOR}".encode(
+            f"{self.type.value}{SEPARATOR}{self.sequence_number}{SEPARATOR}{checksum}{SEPARATOR}".encode(
                 "utf-8"
             )
             + self.data
