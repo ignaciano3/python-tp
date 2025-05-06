@@ -138,10 +138,7 @@ class Download:
                     # El ACK se envía internamente en el método receive del protocolo
                 elif package_type == PackageType.FIN.value:
                     self.logger.info("Received FIN package from server.")
-                    # Enviar ACK al FIN
-                    fin_ack = AckPackage()
-                    self.socket.sendto(fin_ack, self.server_addr)
-                    self.logger.debug("Sent ACK for FIN.")
+                    # El ACK al FIN se envía internamente en el método receive del protocolo
                     break
                 else:
                     self.logger.warning(

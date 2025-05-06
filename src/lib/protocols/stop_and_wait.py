@@ -5,9 +5,9 @@ from lib.packages.DataPackage import DataPackage
 from lib.utils.constants import SEPARATOR, BUFSIZE
 from lib.server.client_info import ClientInfo
 import os
-import time
 from lib.utils.constants import SERVER_STORAGE
 from lib.utils.logger import create_logger
+from lib.packages.FinPackage import FinPackage
 import logging
 
 TIMEOUT_SECONDS = 3.0  # puedes ajustar este valor
@@ -147,32 +147,47 @@ class StopAndWaitProtocol:
                 client_info.file.close()
                 client_info.file = None  # Liberar el archivo
 
+    # def handle_download(self, client_info: ClientInfo):
+    #     sequence_number = 0
+    #     fd = client_info.file_descriptor
+
+    #     while True:
+    #         chunk = os.read(fd, BUFSIZE - 50)
+    #         if not chunk:
+    #             break
+
+    #         package = DataPackage(chunk, sequence_number)
+    #         self.socket.sendto(package, self.send_to_addr)
+
+    #         start_time = time.time()
+
+    #         while self.last_ack != sequence_number:
+    #             if time.time() - start_time > TIMEOUT_SECONDS:
+    #                 print(
+    #                     f"[TIMEOUT] No ACK for seq={sequence_number}, retransmitiendo..."
+    #                 )
+    #                 self.socket.sendto(package, self.send_to_addr)
+    #                 start_time = time.time()
+
+    #             time.sleep(0.01)
+
+    #         # ACK correcto recibido, cambiamos número de secuencia
+    #         sequence_number ^= 1
+
     def handle_download(self, client_info: ClientInfo):
         sequence_number = 0
         fd = client_info.file_descriptor
-
         while True:
             chunk = os.read(fd, BUFSIZE - 50)
             if not chunk:
                 break
-
             package = DataPackage(chunk, sequence_number)
             self.socket.sendto(package, self.send_to_addr)
-
-            start_time = time.time()
-
-            while self.last_ack != sequence_number:
-                if time.time() - start_time > TIMEOUT_SECONDS:
-                    print(
-                        f"[TIMEOUT] No ACK for seq={sequence_number}, retransmitiendo..."
-                    )
-                    self.socket.sendto(package, self.send_to_addr)
-                    start_time = time.time()
-
-                time.sleep(0.01)
-
-            # ACK correcto recibido, cambiamos número de secuencia
+            # Esperar ACK
+            self.socket.recv()  # Aquí es donde se bloquea para Stop-and-Wait
             sequence_number ^= 1
+        fin_package = FinPackage()
+        self.socket.sendto(fin_package, self.send_to_addr)
 
     def handle_ack(self, data: bytes, client_info: ClientInfo):
         ack = AckPackage.from_bytes(data)
