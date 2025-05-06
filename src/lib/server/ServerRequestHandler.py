@@ -42,11 +42,16 @@ class ServerRequestHandler:
 
     def handle_request(self, request: REQUEST):
         self.logger.info(f"Handling request: {request}")
-        data, addr = request
+        package, addr = request
 
         addr_str = f"{addr[0]}:{addr[1]}"
         if addr_str not in self.clients:
-            package = InitPackage.from_bytes(data)
+            if not isinstance(package, InitPackage):
+                self.logger.error(
+                    f"Received unexpected package from {addr_str}: {package}"
+                )
+                return
+            
             file_path = f"{self.server_storage}/{package.get_file_name_without_extension()}.{package.get_file_extension()}"
             if package.operation == "upload":
                 file_descriptor = os.open(
@@ -72,28 +77,23 @@ class ServerRequestHandler:
 
         client_info = self.clients[addr_str]
 
-        package_info = data.split(SEPARATOR.encode("utf-8"))
-        package_type = int(package_info[0].decode("utf-8"))
-        client_info.last_package_type = PackageType(package_type)
-
-        if client_info.last_package_type == PackageType.INIT:
+        if isinstance(package, InitPackage):
             self.send_init_response(client_info)
-        elif client_info.last_package_type == PackageType.DATA:
-            self.handle_data_request(data, client_info)
-        elif client_info.last_package_type == PackageType.ACK:
+        elif isinstance(package, DataPackage):
+            self.handle_upload_request(package, client_info)
+        elif isinstance(package, AckPackage):
             if client_info.operation == "download":
-                self.handle_download_request(data, client_info)
+                self.handle_download_request(package, client_info)
             else:
-                print("[REQUEST HANDLER] Unexpected ACK during upload (ignored)")
-        elif client_info.last_package_type == PackageType.FIN:
+                self.logger.info("[REQUEST HANDLER] Unexpected ACK during upload (ignored)")
+        elif isinstance(package, FinPackage):
             self.handle_finish_request(client_info)
         else:
             self.logger.error(
                 f"Unknown package type for client {addr_str}: {client_info.last_package_type}"
             )
 
-    def handle_upload_request(self, data: bytes, client_info: ClientInfo):
-        _, seq_number, package_data = data.split(SEPARATOR.encode("utf-8"))
+    def handle_upload_request(self, package: DataPackage, client_info: ClientInfo):
 
         if client_info.file is None:
             file = open(f"{self.server_storage}/{client_info.filename}", "ab+")
@@ -101,13 +101,13 @@ class ServerRequestHandler:
         else:
             file = client_info.file
 
-        file.write(package_data)
+        file.write(package.data)
 
         self.logger.info(f"File written successfully from {client_info.addr}")
 
-        self.send_ack(client_info.addr, int(seq_number))
+        self.send_ack(client_info.addr, int(package.sequence_number))
 
-    def handle_download_request(self, data: bytes, client_info: ClientInfo):
+    def handle_download_request(self, package: AckPackage, client_info: ClientInfo):
         file_descriptor = client_info.file_descriptor
 
         if file_descriptor is None:
@@ -126,16 +126,6 @@ class ServerRequestHandler:
 
     def send_init_response(self, client_info: ClientInfo):
         self.send_ack(client_info.addr)
-
-    def handle_data_request(self, data: bytes, client_info: ClientInfo):
-        if client_info.operation == "upload":
-            self.handle_upload_request(data, client_info)
-        elif client_info.operation == "download":
-            self.handle_download_request(data, client_info)
-        else:
-            self.logger.error(
-                f"Unknown operation for client {client_info.addr}: {client_info.operation}"
-            )
 
     def handle_finish_request(self, client_info: ClientInfo):
         self.logger.warning(f"File transfer finished from {client_info.addr}")

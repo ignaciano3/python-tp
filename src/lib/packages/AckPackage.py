@@ -14,9 +14,8 @@ class AckPackage(Package):
     def to_bytes(self) -> bytes:
         return f"{self.type.value}{SEPARATOR}{self.sequence_number}".encode("utf-8")
 
-    @staticmethod
-    def from_bytes(data: bytes) -> "AckPackage":
-        # Separamos la información del tipo de paquete y el número de secuencia
-        parts = data.decode("utf-8").split(SEPARATOR)
+    @classmethod
+    def from_bytes(cls, raw: bytes) -> "AckPackage":
+        parts = raw.decode("utf-8").split(SEPARATOR)
         sequence_number = int(parts[1])
-        return AckPackage(sequence_number)
+        return cls(sequence_number)

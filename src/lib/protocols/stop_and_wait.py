@@ -23,7 +23,7 @@ class StopAndWaitProtocol:
 
         # Espera la confirmación (ACK)
         try:
-            self.socket.settimeout(1)  # Timeout de 1 segundo
+            self.socket.settimeout(10)  # Timeout de 1 segundo
             ack, _ = self.socket.recv()
         except TimeoutError:
             print("Timeout alcanzado. Reintentando...")
@@ -34,10 +34,11 @@ class StopAndWaitProtocol:
             self.tries += 1
             self.send(package)
 
-        ack_package = AckPackage.from_bytes(ack)  # type: ignore
+        if not isinstance(ack, AckPackage):
+            return
 
         # Si el número de secuencia no coincide, vuelve a enviar el paquete
-        if ack_package.sequence_number != self.sequence_number:
+        if  ack.sequence_number != self.sequence_number:
             self.tries += 1
             self.send(package)  # Retransmite si el número de secuencia no coincide
         else:

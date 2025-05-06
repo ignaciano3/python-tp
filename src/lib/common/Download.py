@@ -48,22 +48,12 @@ class Download:
         # 2. Esperar ACK
         self.socket.recv()
 
-        fin_packatge_type = str(PackageType.FIN.value) + SEPARATOR
-        data_package_type = str(PackageType.DATA.value) + SEPARATOR
-
         self.send_ack(0)
 
         finished = False
         with open(self.file_path, "wb") as file:
             while not finished:
-                data, _ = self.socket.recv()
-
-                if data.decode().startswith(fin_packatge_type):
-                    package = FinPackage.from_bytes(data)
-                elif data.decode().startswith(data_package_type):
-                    package = DataPackage.from_bytes(data)
-                else:
-                    raise Exception("El paquete recibido no es un DataPackage.")
+                package, _ = self.socket.recv()
 
                 finished = self.protocol_handler.receive(package, file)
 

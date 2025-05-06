@@ -17,7 +17,6 @@ class Client:
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         protocol: Protocol = Protocol.STOP_WAIT,
-        client_storage: str = CLIENT_STORAGE,
         logging_level=logging.DEBUG,
     ) -> None:
         self.host = host
@@ -27,7 +26,6 @@ class Client:
         self.logger = create_logger("client", "[CLIENT]", logging_level)
         self.socket = Socket(logging_level)
         self.file_path = file_path
-        self.client_storage = client_storage
         self.protocol = protocol
 
         if self.operation == "upload":
