@@ -47,7 +47,11 @@ class SelectiveRepeatProtocol:
             self.send_next_packet(package.to_bytes(), self.sequence_number)
             self.sequence_number += 1
 
-    def receive(self) -> bytes:
+    def receive(self, package, file):
+        pass
+
+    """
+    def receivee(self) -> bytes:
         data, _ = self.socket.recv()
 
         # Extrae el número de secuencia del paquete
@@ -62,6 +66,7 @@ class SelectiveRepeatProtocol:
         self.socket.sendto(ack, self.server_addr)
 
         return data
+        """
 
     def start_sending(self, file_path: str):
         with open(file_path, "rb") as file:

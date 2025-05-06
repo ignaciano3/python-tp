@@ -2,13 +2,15 @@ import os
 from lib.utils.Socket import Socket
 from lib.utils.types import ADDR
 from lib.packages.InitPackage import DownloadHeader
-from lib.packages.DataPackage import DataPackage
 from lib.packages.AckPackage import AckPackage
 import logging
 from lib.utils.logger import create_logger
 from lib.utils.enums import PackageType, Protocol
-from lib.utils.constants import SEPARATOR
 from lib.packages.FinPackage import FinPackage
+from lib.protocols.selective_repeat import SelectiveRepeatProtocol
+from lib.protocols.stop_and_wait import StopAndWaitProtocol
+from lib.packages.DataPackage import DataPackage
+from lib.utils.constants import SEPARATOR
 
 
 class Download:
@@ -28,6 +30,13 @@ class Download:
         )
         self.protocol = protocol
 
+        if protocol.value == Protocol.STOP_WAIT.value:
+            self.protocol_handler = StopAndWaitProtocol(socket, server_addr)
+        elif protocol.value == Protocol.SELECTIVE_REPEAT.value:
+            self.protocol_handler = SelectiveRepeatProtocol(socket, server_addr)
+        else:
+            raise ValueError("Unsupported protocol")
+
     def start(self) -> None:
         file_name = os.path.basename(self.file_path)
         print("filepath", self.file_path)
@@ -38,36 +47,25 @@ class Download:
 
         # 2. Esperar ACK
         self.socket.recv()
+
         fin_packatge_type = str(PackageType.FIN.value) + SEPARATOR
-        sequence_number = 0
-        self.send_ack(sequence_number)
+        data_package_type = str(PackageType.DATA.value) + SEPARATOR
 
-        ## Protocolo ///
+        self.send_ack(0)
 
+        finished = False
         with open(self.file_path, "wb") as file:
-            while True:
-                data, server_addr = self.socket.recv()
-
-                # 3. Ver si es FIN
-                # Si el paquete es un FIN, se cierra la conexión
+            while not finished:
+                data, _ = self.socket.recv()
 
                 if data.decode().startswith(fin_packatge_type):
-                    file.flush()
-                    self.logger.info("Received FIN package.")
-                    break
+                    package = FinPackage.from_bytes(data)
+                elif data.decode().startswith(data_package_type):
+                    package = DataPackage.from_bytes(data)
+                else:
+                    raise Exception("El paquete recibido no es un DataPackage.")
 
-                # 4. Sino, es un DataPackage
-                data_package = DataPackage.from_bytes(data)
-                print("data: ", data_package.data)
-                file.write(data_package.data)
-                # file.flush()
-
-                # 5. ACK por cada paquete
-                self.send_ack(sequence_number)
-                sequence_number ^= (
-                    1  # TODO: Implement a better sequence number handling
-                )
-        ## Protocolo ///
+                finished = self.protocol_handler.receive(package, file)
 
         self.logger.info(f"File {file_name} downloaded successfully.")
 

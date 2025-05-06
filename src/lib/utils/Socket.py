@@ -27,3 +27,7 @@ class Socket:
     def close(self) -> None:
         self.logger.debug("Closing socket")
         self.socket.close()
+
+    def settimeout(self, timeout: int) -> None:
+        self.logger.debug(f"Setting socket timeout to {timeout} seconds")
+        self.socket.settimeout(timeout)

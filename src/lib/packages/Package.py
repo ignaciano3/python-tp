@@ -1,5 +1,5 @@
 from lib.utils.enums import PackageType
-from lib.utils.constants import BUFSIZE
+from lib.utils.constants import BUFSIZE, SEPARATOR
 
 
 class Package:
@@ -21,3 +21,8 @@ class Package:
     @classmethod
     def from_bytes(cls, raw: bytes) -> "Package":
         raise NotImplementedError("Subclasses should implement this method")
+
+    @classmethod
+    def get_type(cls, package_raw: bytes) -> PackageType:
+        package_type_raw = package_raw.decode("utf-8").split(SEPARATOR)[0]
+        return PackageType(int(package_type_raw))
