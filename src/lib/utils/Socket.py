@@ -1,4 +1,5 @@
 import logging
+import random
 import socket
 
 from lib.utils.constants import BUFSIZE
@@ -24,6 +25,13 @@ class Socket:
     def recv(self, bufsize=BUFSIZE) -> tuple[Package, tuple[str, int]]:
         self.logger.debug(f"Receiving data with buffer size {bufsize}")
         try:
+            # TODO------- HAGO QUE FALLEN EL 100% DE LOS PAQUETES -------
+            random_number = random.randint(0, 100)
+
+            if random_number < 10:
+                self.logger.debug("Simulating packet loss")
+                raise socket.error("Simulated packet loss")
+ 
             received = self.socket.recvfrom(bufsize)
             package_raw = received[0]
             package = FactoryPackage.recover_package(package_raw)
