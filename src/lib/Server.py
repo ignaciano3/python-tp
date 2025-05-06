@@ -4,6 +4,7 @@ from lib.utils.Socket import Socket
 from lib.server.ServerRequestHandler import ServerRequestHandler
 from lib.utils.constants import SERVER_STORAGE
 from lib.utils.enums import Protocol
+from lib.utils.package_error import ChecksumErr, PackageErr
 
 
 class Server:
@@ -52,6 +53,9 @@ class Server:
                 )
                 self.stop()
                 break
+            except (PackageErr, ChecksumErr, TimeoutError) as e:
+                self.logger.error(f"Error in package: {e}")
+                continue
             except OSError as e:
                 if not self.running:
                     break
