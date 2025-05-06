@@ -298,7 +298,7 @@ def test_concurrent_upload_xl(storages):
         client_thread.start()
 
     for client_thread in client_threads:
-        client_thread.join(15)
+        client_thread.join(10)
 
     for client_thread in client_threads:
         assert client_thread.is_alive() is False

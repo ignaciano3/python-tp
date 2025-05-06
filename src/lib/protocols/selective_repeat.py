@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 from io import BufferedReader, BufferedWriter
+import logging
 from lib.utils.Socket import Socket
 from lib.utils.types import ADDR
 from lib.utils.constants import BUFSIZE
 from lib.packages.DataPackage import DataPackage
 from lib.packages.AckPackage import AckPackage
+from lib.utils.logger import create_logger
+
 
 @dataclass
 class WindowItem:
@@ -14,76 +17,75 @@ class WindowItem:
 
 
 class Window:
-    def __init__(self, start: int, end: int):
-        self.start = start  # Número de secuencia del primer paquete en la ventana
-        self.end = end  # Número de secuencia del último paquete en la ventana
-        self.acks: list[WindowItem] = []  # ACKs recibidos en la ventana
+    def __init__(self, size: int = 5):
+        self.size = size  # Número de secuencia del primer paquete en la ventana
+        self.items: list[WindowItem] = []  # ACKs recibidos en la ventana
+
+    def length(self) -> int:
+        return len(self.items)
+
 
 class SelectiveRepeatProtocol:
     def __init__(self, socket: Socket, server_addr: ADDR, window_size: int = 5):
         self.socket = socket
         self.server_addr = server_addr
-        self.window = Window(0, window_size - 1)
-        self.sequence_number = 0
+        self.window = Window(window_size)
+        self.logger = create_logger(
+            "selective_repeat", "[SELECTIVE REPEAT]", logging.DEBUG
+        )
+        self.last_sequence_number = 0
+        self.first_sequence_number = 0
 
     def send(self, file: BufferedReader) -> None:
-        while True:
-            data = file.read(BUFSIZE - 8)
-            if not data:
-                break  # Fin del archivo
-            
-            while self.window.end - self.window.start + 1 >= 5:
-                data_package = DataPackage(data, self.sequence_number)
-                self._send_aux(data_package)
+        finished = False
+        while not finished:
+            while self.window.length() < self.window.size:
+                data = file.read(BUFSIZE - 16)
 
-    def _send_aux(self, package: DataPackage) -> None:
-        # Envía el paquete al servidor
+                if not data:
+                    break
+
+                data_package = DataPackage(data, self.last_sequence_number)
+                self._send_package(data_package)
+
+            if self.window.length() == 0:
+                finished = True
+                break
+            self._receive_ack()
+
+    def _send_package(self, package: DataPackage) -> None:
         self.socket.sendto(package, self.server_addr)
+        self.logger.debug(f"Enviando paquete: {package.sequence_number}")
+        self.window.items.append(WindowItem(package.sequence_number, package.data))
+        self.last_sequence_number += 1
 
+    def _receive_ack(self) -> None:
         # Espera la confirmación (ACK)
-        ack = None
-        try:
-            self.socket.settimeout(10)  # Timeout de 1 segundo
-            ack, _ = self.socket.recv()
-        except TimeoutError:
-            print("Timeout alcanzado. Reintentando...")
-            self._send_aux(package)
-        except Exception as e:
-            print(f"Error al recibir el ACK: {e}")
-            self._send_aux(package)
+        self.socket.settimeout(1)  # Timeout de 1 segundo
+        ack, _ = self.socket.recv()
 
         if not isinstance(ack, AckPackage):
             return
 
+        self.logger.debug(f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})")
         # Si el número de secuencia no coincide, vuelve a enviar el paquete
-        if ack.sequence_number != self.sequence_number:
-            self._send_aux(package)
-        else:
-            # Agrega el número de secuencia al conjunto de recibidos
-            self.window.acks.append(WindowItem(ack.sequence_number, ack.data, True))
+        if ack.sequence_number != self.first_sequence_number:
+            self.logger.debug(f"ACK no coincide: {ack.sequence_number} != {self.first_sequence_number}")
+            # Setear el ack en el item con ese número de secuencia
 
-            # Si el número de secuencia coincide, actualiza la ventana
-            if ack.sequence_number == self.window.start:
-                self.window.start += 1
-                self.window.acks.pop(ack.sequence_number)
+            for item in self.window.items:
+                if item.sequence_number == ack.sequence_number:
+                    item.acked = True
+                    break
+        else:
+            self.window.items.remove(
+                next(
+                    item
+                    for item in self.window.items
+                    if item.sequence_number == ack.sequence_number
+                )
+            )
+            self.first_sequence_number += 1
 
     def receive(self, file: BufferedWriter):
         pass
-
-    """
-    def receivee(self) -> bytes:
-        data, _ = self.socket.recv()
-
-        # Extrae el número de secuencia del paquete
-        ack_package = AckPackage.from_bytes(data)
-        sequence_number = ack_package.sequence_number
-
-        # Agrega el número de secuencia al conjunto de recibidos
-        self.received_packets.add(sequence_number)
-
-        # Enviar un ACK con el número de secuencia
-        ack = AckPackage(sequence_number)
-        self.socket.sendto(ack, self.server_addr)
-
-        return data
-        """
