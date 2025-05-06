@@ -17,7 +17,7 @@ class Download:
         file_path: str,
         socket: Socket,
         server_addr: ADDR,
-        protocol = Protocol.STOP_WAIT,
+        protocol=Protocol.STOP_WAIT,
         logging_level=logging.DEBUG,
     ) -> None:
         self.file_path = file_path
@@ -38,35 +38,41 @@ class Download:
 
         # 2. Esperar ACK
         self.socket.recv()
-
+        fin_packatge_type = str(PackageType.FIN.value) + SEPARATOR
         sequence_number = 0
+        self.send_ack(sequence_number)
+
         with open(self.file_path, "wb") as file:
             while True:
                 data, server_addr = self.socket.recv()
 
-                
                 # 3. Ver si es FIN
                 # Si el paquete es un FIN, se cierra la conexión
-                fin_packatge_type = str(PackageType.FIN.value) + SEPARATOR
+
                 if data.decode().startswith(fin_packatge_type):
+                    file.flush()
                     self.logger.info("Received FIN package.")
-                    self.send_ack()
                     break
 
                 # 4. Sino, es un DataPackage
                 data_package = DataPackage.from_bytes(data)
                 print("data: ", data_package.data)
                 file.write(data_package.data)
-                file.flush()
+                # file.flush()
 
                 # 5. ACK por cada paquete
                 self.send_ack(sequence_number)
-                sequence_number ^= 1 # TODO: Implement a better sequence number handling
+                sequence_number ^= (
+                    1  # TODO: Implement a better sequence number handling
+                )
 
         self.logger.info(f"File {file_name} downloaded successfully.")
 
         fin_package = FinPackage()
         self.socket.sendto(fin_package, self.server_addr)
+
+        self.socket.recv()
+
         self.socket.close()
 
     def send_ack(self, sequence_number: int = 0) -> None:

@@ -22,6 +22,7 @@ class ClientInfo:
     last_package_type: PackageType
     filename: str
     file: BufferedRandom | None = None
+    seq_number: int = 0
 
 
 class ServerRequestHandler:
@@ -77,14 +78,11 @@ class ServerRequestHandler:
 
         if client_info.last_package_type == PackageType.INIT:
             self.send_init_response(client_info)
-            if client_info.operation == "download":
-                self.handle_download_request(data, client_info)
         elif client_info.last_package_type == PackageType.DATA:
-            
             self.handle_data_request(data, client_info)
         elif client_info.last_package_type == PackageType.ACK:
             if client_info.operation == "download":
-                print("[REQUEST HANDLER] ACK received during download (ignored)")
+                self.handle_download_request(data, client_info)
             else:
                 print("[REQUEST HANDLER] Unexpected ACK during upload (ignored)")
         elif client_info.last_package_type == PackageType.FIN:
@@ -102,7 +100,7 @@ class ServerRequestHandler:
             client_info.file = file
         else:
             file = client_info.file
-        
+
         file.write(package_data)
 
         self.logger.info(f"File written successfully from {client_info.addr}")
@@ -115,8 +113,53 @@ class ServerRequestHandler:
         if file_descriptor is None:
             self.logger.error("No file descriptor available for download.")
             return
-        
-        sequence_number = 0
+
+        chunk = os.read(file_descriptor, BUFSIZE - 50)
+
+        if not chunk:
+            self.logger.info(f"File transfer finished for {client_info.addr}")
+            self.send_fin(client_info.addr)
+            return
+
+        data_package = DataPackage(chunk, client_info.seq_number)
+        self.socket.sendto(data_package, client_info.addr)
+
+    def send_init_response(self, client_info: ClientInfo):
+        self.send_ack(client_info.addr)
+
+    def handle_data_request(self, data: bytes, client_info: ClientInfo):
+        if client_info.operation == "upload":
+            self.handle_upload_request(data, client_info)
+        elif client_info.operation == "download":
+            self.handle_download_request(data, client_info)
+        else:
+            self.logger.error(
+                f"Unknown operation for client {client_info.addr}: {client_info.operation}"
+            )
+
+    def handle_finish_request(self, client_info: ClientInfo):
+        self.logger.warning(f"File transfer finished from {client_info.addr}")
+        self.send_ack(client_info.addr)
+        os.close(client_info.file_descriptor)
+
+        if client_info.file:
+            client_info.file.close()
+            client_info.file = None
+
+        del self.clients[f"{client_info.addr[0]}:{client_info.addr[1]}"]
+
+    def send_ack(self, addr: ADDR, seq_num: int = 0):
+        ack_package = AckPackage(seq_num)
+        self.socket.sendto(ack_package, addr)
+        self.logger.info(f"ACK sent to {addr}")
+
+    def send_fin(self, addr: ADDR):
+        fin_package = FinPackage()
+        self.socket.sendto(fin_package, addr)
+        self.logger.info(f"FIN sent to {addr}")
+
+
+"""
 
         try:
             while True:
@@ -137,33 +180,4 @@ class ServerRequestHandler:
             self.logger.info(f"File sent successfully to {client_info.addr}")
 
         except Exception as e:
-            self.logger.error(f"Error while handling download request: {e}")
-
-    def send_init_response(self, client_info: ClientInfo):
-        self.send_ack(client_info.addr)
-
-    def handle_data_request(self, data: bytes, client_info: ClientInfo):
-        if client_info.operation == "upload":
-            self.handle_upload_request(data, client_info)
-        elif client_info.operation == "download":
-            self.handle_download_request(data, client_info)
-        else:
-            self.logger.error(
-                f"Unknown operation for client {client_info.addr}: {client_info.operation}"
-            )
-
-    def handle_finish_request(self, client_info: ClientInfo):
-        self.logger.warning(f"File transfer finished from {client_info.addr}")
-        self.send_ack(client_info.addr)
-        os.close(client_info.file_descriptor)
-        
-        if client_info.file:
-            client_info.file.close()
-            client_info.file = None
-        
-        del self.clients[f"{client_info.addr[0]}:{client_info.addr[1]}"]
-
-    def send_ack(self, addr: ADDR, seq_num: int = 0):
-        ack_package = AckPackage(seq_num)
-        self.socket.sendto(ack_package, addr)
-        self.logger.info(f"ACK sent to {addr}")
+            self.logger.error(f"Error while handling download request: {e}")"""
