@@ -10,7 +10,7 @@ from lib.utils.constants import SERVER_STORAGE
 from lib.utils.logger import create_logger
 import logging
 
-TIMEOUT_SECONDS = 2.0  # puedes ajustar este valor
+TIMEOUT_SECONDS = 3.0  # puedes ajustar este valor
 
 
 class StopAndWaitProtocol:
@@ -60,7 +60,7 @@ class StopAndWaitProtocol:
                     ack = AckPackage()
                     self.socket.sendto(ack, self.send_to_addr)
                     return data
-                elif received_package_type == 2:  # PackageType.DATA.value
+                elif received_package_type == 1:  # PackageType.DATA.value
                     data_package = DataPackage.from_bytes(data)
 
                     if data_package.sequence_number == self.sequence_number:

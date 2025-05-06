@@ -14,6 +14,7 @@ from lib.utils.constants import Protocol
 from lib.protocols.stop_and_wait import StopAndWaitProtocol
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
 from lib.server.client_info import ClientInfo
+import threading
 
 PROTOCOL = Protocol.STOP_WAIT
 
@@ -44,74 +45,161 @@ class ServerRequestHandler:
             "request-handler", "[REQUEST HANDLER]", logging_level
         )
 
+    # def handle_request(self, request: REQUEST):
+    #     self.logger.info(f"Handling request: {request}")
+    #     data, addr = request
+
+    #     addr_str = f"{addr[0]}:{addr[1]}"
+    #     if addr_str not in self.clients:
+    #         package = InitPackage.from_bytes(data)
+    #         file_path = f"{self.server_storage}/{package.get_file_name_without_extension()}.{package.get_file_extension()}"
+    #         if package.operation == "upload":
+    #             file_descriptor = os.open(
+    #                 file_path,
+    #                 os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+    #             )
+    #         else:
+    #             # Open existing file for reading
+    #             file_descriptor = os.open(
+    #                 file_path,
+    #                 os.O_RDONLY,
+    #             )
+    #         self.protocol = PROTOCOL  ##########################################cambiar
+
+    #         if self.protocol == Protocol.STOP_WAIT:
+    #             handler = StopAndWaitProtocol(self.socket, addr)
+    #         elif self.protocol == Protocol.SELECTIVE_REPEAT:
+    #             handler = SelectiveRepeatProtocol(self.socket, addr)
+    #         else:
+    #             raise ValueError("Unknown protocol")
+
+    #         self.clients[addr_str] = ClientInfo(
+    #             addr=addr,
+    #             operation=package.operation,
+    #             file_descriptor=file_descriptor,
+    #             last_package_type=PackageType.INIT,
+    #             filename=package.file_name,
+    #             protocol_handler=handler,
+    #         )
+    #         self.logger.info(
+    #             f"New client connected: {addr_str} with operation {package.operation}"
+    #         )
+
+    #     client_info = self.clients[addr_str]
+
+    #     package_info = data.split(SEPARATOR.encode("utf-8"))
+    #     package_type = int(package_info[0].decode("utf-8"))
+    #     client_info.last_package_type = PackageType(package_type)
+
+    #     if client_info.last_package_type == PackageType.INIT:
+    #         self.send_init_response(client_info)
+    #         if client_info.operation == "download":
+    #             # self.handle_download_request(data, client_info)
+    #             client_info.protocol_handler.handle_download(client_info)
+
+    #     elif client_info.last_package_type == PackageType.DATA:
+    #         client_info.protocol_handler.handle_data(data, client_info)
+    #         # self.handle_data_request(data, client_info)
+
+    #     elif client_info.last_package_type == PackageType.ACK:
+    #         if client_info.operation == "download":
+    #             client_info.protocol_handler.handle_ack(data, client_info)
+    #             # print("[REQUEST HANDLER] ACK received during download (ignored)")
+    #         else:
+    #             print("[REQUEST HANDLER] Unexpected ACK during upload (ignored)")
+    #     elif client_info.last_package_type == PackageType.FIN:
+    #         self.handle_finish_request(client_info)
+    #     else:
+    #         self.logger.error(
+    #             f"Unknown package type for client {addr_str}: {client_info.last_package_type}"
+    #         )
+
     def handle_request(self, request: REQUEST):
         self.logger.info(f"Handling request: {request}")
         data, addr = request
 
         addr_str = f"{addr[0]}:{addr[1]}"
         if addr_str not in self.clients:
-            package = InitPackage.from_bytes(data)
-            file_path = f"{self.server_storage}/{package.get_file_name_without_extension()}.{package.get_file_extension()}"
-            if package.operation == "upload":
-                file_descriptor = os.open(
-                    file_path,
-                    os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            try:
+                package = InitPackage.from_bytes(data)
+                operation = package.operation
+                file_path = f"{self.server_storage}/{package.get_file_name_without_extension()}.{package.get_file_extension()}"
+
+                if operation == "upload":
+                    file_descriptor = os.open(
+                        file_path,
+                        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                    )
+                elif operation == "download":
+                    file_descriptor = os.open(
+                        file_path,
+                        os.O_RDONLY,
+                    )
+                else:
+                    self.logger.error(
+                        f"Unknown operation requested by {addr_str}: {operation}"
+                    )
+                    return
+
+                self.protocol = PROTOCOL
+
+                if self.protocol == Protocol.STOP_WAIT:
+                    handler = StopAndWaitProtocol(self.socket, addr)
+                elif self.protocol == Protocol.SELECTIVE_REPEAT:
+                    handler = SelectiveRepeatProtocol(self.socket, addr)
+                else:
+                    raise ValueError("Unknown protocol")
+
+                client_info = ClientInfo(
+                    addr=addr,
+                    operation=operation,
+                    file_descriptor=file_descriptor,
+                    last_package_type=PackageType.INIT,
+                    filename=package.file_name,
+                    protocol_handler=handler,
                 )
-            else:
-                # Open existing file for reading
-                file_descriptor = os.open(
-                    file_path,
-                    os.O_RDONLY,
+                self.clients[addr_str] = client_info
+                self.logger.info(
+                    f"New client connected: {addr_str} with operation {operation} for file {package.file_name}"
                 )
-            self.protocol = PROTOCOL  ##########################################cambiar
+                self.send_init_response(client_info)  # Send ACK after processing INIT
 
-            if self.protocol == Protocol.STOP_WAIT:
-                handler = StopAndWaitProtocol(self.socket, addr)
-            elif self.protocol == Protocol.SELECTIVE_REPEAT:
-                handler = SelectiveRepeatProtocol(self.socket, addr)
-            else:
-                raise ValueError("Unknown protocol")
+                if operation == "download":
+                    # Ejecutar la descarga en un hilo separado
+                    download_thread = threading.Thread(
+                        target=self._handle_download_threaded, args=(client_info,)
+                    )
+                    download_thread.start()
 
-            self.clients[addr_str] = ClientInfo(
-                addr=addr,
-                operation=package.operation,
-                file_descriptor=file_descriptor,
-                last_package_type=PackageType.INIT,
-                filename=package.file_name,
-                protocol_handler=handler,
-            )
-            self.logger.info(
-                f"New client connected: {addr_str} with operation {package.operation}"
-            )
+            except Exception as e:
+                self.logger.error(
+                    f"Error processing initial package from {addr_str}: {e}"
+                )
+                return
 
-        client_info = self.clients[addr_str]
-
-        package_info = data.split(SEPARATOR.encode("utf-8"))
-        package_type = int(package_info[0].decode("utf-8"))
-        client_info.last_package_type = PackageType(package_type)
-
-        if client_info.last_package_type == PackageType.INIT:
-            self.send_init_response(client_info)
-            if client_info.operation == "download":
-                # self.handle_download_request(data, client_info)
-                client_info.protocol_handler.handle_download(client_info)
-
-        elif client_info.last_package_type == PackageType.DATA:
-            client_info.protocol_handler.handle_data(data, client_info)
-            # self.handle_data_request(data, client_info)
-
-        elif client_info.last_package_type == PackageType.ACK:
-            if client_info.operation == "download":
-                client_info.protocol_handler.handle_ack(data, client_info)
-                # print("[REQUEST HANDLER] ACK received during download (ignored)")
-            else:
-                print("[REQUEST HANDLER] Unexpected ACK during upload (ignored)")
-        elif client_info.last_package_type == PackageType.FIN:
-            self.handle_finish_request(client_info)
         else:
-            self.logger.error(
-                f"Unknown package type for client {addr_str}: {client_info.last_package_type}"
-            )
+            client_info = self.clients[addr_str]
+            package_info = data.split(SEPARATOR.encode("utf-8"))
+            package_type = int(package_info[0].decode("utf-8"))
+            client_info.last_package_type = PackageType(package_type)
+
+            if client_info.last_package_type == PackageType.DATA:
+                client_info.protocol_handler.handle_data(data, client_info)
+            elif client_info.last_package_type == PackageType.ACK:
+                if client_info.operation == "download":
+                    client_info.protocol_handler.handle_ack(data, client_info)
+                else:
+                    print("[REQUEST HANDLER] Unexpected ACK during upload (ignored)")
+            elif client_info.last_package_type == PackageType.FIN:
+                self.handle_finish_request(client_info)
+            else:
+                self.logger.error(
+                    f"Unknown package type for client {addr_str}: {client_info.last_package_type}"
+                )
+
+    def _handle_download_threaded(self, client_info: ClientInfo):
+        """Maneja la lógica de descarga en un hilo separado."""
+        client_info.protocol_handler.handle_download(client_info)
 
     def handle_upload_request(self, data: bytes, client_info: ClientInfo):
         _, seq_number, package_data = data.split(SEPARATOR.encode("utf-8"))
