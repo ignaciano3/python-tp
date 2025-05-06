@@ -81,6 +81,11 @@ class ServerRequestHandler:
             )
 
     def handle_upload_request(self, package: DataPackage, client_info: ClientInfo):
+        print("DESDE HANDLE UPLOAD REQUEST",package.valid)
+        if not package.valid:
+            self.send_nack(client_info.addr, int(package.sequence_number))
+            return
+        
         if client_info.file is None:
             file = open(f"{self.server_storage}/{client_info.filename}", "ab+")
             client_info.file = file
@@ -127,6 +132,12 @@ class ServerRequestHandler:
         ack_package = AckPackage(seq_num)
         self.socket.sendto(ack_package, addr)
         self.logger.info(f"ACK sent to {addr}")
+    
+    def send_nack(self, addr: ADDR, seq_num: int = 0):
+        nack_package = AckPackage(seq_num)
+        nack_package.valid = False
+        self.socket.sendto(nack_package, addr)
+        self.logger.info(f"NACK sent to {addr}")
 
     def send_fin(self, addr: ADDR):
         fin_package = FinPackage()

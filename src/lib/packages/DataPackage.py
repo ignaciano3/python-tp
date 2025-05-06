@@ -16,7 +16,7 @@ class DataPackage(Package):
         # Codifica como: DATA|<sequence_number>|<payload>
         checksum = self.get_checksum()
         return (
-            f"{self.type.value}{SEPARATOR}{self.sequence_number}{SEPARATOR}{checksum}{SEPARATOR}".encode(
+            f"{self.type.value}{SEPARATOR}{self.sequence_number}{SEPARATOR}{0}{SEPARATOR}".encode(
                 "utf-8"
             )
             + self.data
@@ -35,7 +35,7 @@ class DataPackage(Package):
 
             instance = cls(payload, sequence_number)
             if instance.get_checksum() != checksum:
-                raise ChecksumErr("Checksum does not match")
+                instance.valid = False
 
             return instance
 
