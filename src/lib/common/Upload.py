@@ -5,6 +5,7 @@ from lib.utils.types import ADDR
 from lib.packages.InitPackage import UploadHeader
 from lib.utils.logger import create_logger
 from lib.packages.FinPackage import FinPackage
+from lib.packages.DataPackage import DataPackage
 from lib.utils.constants import BUFSIZE
 from lib.protocols.stop_and_wait import StopAndWaitProtocol
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
@@ -17,7 +18,7 @@ class Upload:
         file_path: str,
         socket: Socket,
         server_addr: ADDR,
-        protocol = Protocol.STOP_WAIT,
+        protocol=Protocol.STOP_WAIT,
         logging_level=logging.DEBUG,
     ) -> None:
         self.file_path = file_path
@@ -42,15 +43,17 @@ class Upload:
         self.socket.sendto(header, self.server_addr)
         self.socket.recv()  # Esperar respuesta de servidor
 
+        ## Protocolo ///
+
         with open(self.file_path, "rb") as file:
-            chunks = []
             while True:
                 data = file.read(BUFSIZE - 8)
                 if not data:
                     break  # Fin del archivo
-                chunks.append(data)
 
-                self.protocol_handler.send(data)  # Enviar un chunk
+                data_package = DataPackage(data, self.protocol_handler.sequence_number)
+                self.protocol_handler.send(data_package)  # Enviar un chunk
+        ## Protocolo ///
 
         fin_package = FinPackage()
         self.socket.sendto(fin_package, self.server_addr)

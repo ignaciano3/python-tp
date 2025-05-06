@@ -3,6 +3,8 @@ from lib.packages.AckPackage import AckPackage
 from lib.utils.Socket import Socket
 from lib.utils.types import ADDR
 from lib.utils.constants import BUFSIZE
+from lib.packages.Package import Package
+from lib.utils.enums import PackageType
 
 
 class SelectiveRepeatProtocol:
@@ -39,10 +41,10 @@ class SelectiveRepeatProtocol:
                     b""
                 )  ########################################chequear que este bien
 
-    def send(self, data: bytes) -> None:
+    def send(self, package: Package) -> None:
         if self.window_end < self.window_start + self.window_size:
             # Si hay espacio en la ventana, envía el siguiente paquete
-            self.send_next_packet(data, self.sequence_number)
+            self.send_next_packet(package.to_bytes(), self.sequence_number)
             self.sequence_number += 1
 
     def receive(self) -> bytes:
@@ -68,4 +70,5 @@ class SelectiveRepeatProtocol:
                 if not data:
                     break  # Fin del archivo
                 # Enviar el paquete si hay espacio en la ventana
-                self.send(data)
+                package = Package(PackageType.DATA, data)
+                self.send(package)

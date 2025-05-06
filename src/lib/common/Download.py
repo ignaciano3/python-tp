@@ -42,6 +42,8 @@ class Download:
         sequence_number = 0
         self.send_ack(sequence_number)
 
+        ## Protocolo ///
+
         with open(self.file_path, "wb") as file:
             while True:
                 data, server_addr = self.socket.recv()
@@ -65,6 +67,7 @@ class Download:
                 sequence_number ^= (
                     1  # TODO: Implement a better sequence number handling
                 )
+        ## Protocolo ///
 
         self.logger.info(f"File {file_name} downloaded successfully.")
 
