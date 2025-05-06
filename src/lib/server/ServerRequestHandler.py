@@ -93,7 +93,9 @@ class ServerRequestHandler:
             )
 
     def handle_upload_request(self, data: bytes, client_info: ClientInfo):
-        _, seq_number, package_data = data.split(SEPARATOR.encode("utf-8"))
+        data_package = DataPackage.from_bytes(data)
+        seq_number = data_package.sequence_number
+        package_data = data_package.data
 
         if client_info.file is None:
             file = open(f"{self.server_storage}/{client_info.filename}", "ab+")

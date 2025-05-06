@@ -4,6 +4,7 @@ import socket
 from lib.utils.constants import BUFSIZE
 from lib.utils.logger import create_logger
 from lib.packages.Package import Package
+from lib.utils.package_error import PackageErr, ChecksumErr
 
 
 class Socket:
@@ -21,8 +22,14 @@ class Socket:
 
     def recv(self, bufsize=BUFSIZE) -> tuple[bytes, tuple[str, int]]:
         self.logger.debug(f"Receiving data with buffer size {bufsize}")
-        # TODO: Hacer q convierta a package
-        return self.socket.recvfrom(bufsize)
+        try:
+            return self.socket.recvfrom(bufsize)
+        except (PackageErr, ChecksumErr) as e:
+            self.logger.error(f"Error en el paquete recibido: {e}")
+            raise
+        except Exception:
+            self.logger.exception("Excepción inesperada en recv:")
+            raise
 
     def close(self) -> None:
         self.logger.debug("Closing socket")

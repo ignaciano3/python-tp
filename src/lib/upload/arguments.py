@@ -36,7 +36,7 @@ parser.add_argument(
     "-p", "--port", action="store_true", help="server port", default=DEFAULT_PORT
 )
 parser.add_argument(
-    "-s", "--src", help="source file path", default=CLIENT_STORAGE + "hello.txt"
+    "-s", "--src", help="source file path", default=CLIENT_STORAGE + "/hello.txt"
 )
 parser.add_argument("-n", "--name", action="store_true", help="file name")
 parser.add_argument(
