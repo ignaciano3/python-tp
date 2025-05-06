@@ -4,7 +4,7 @@ from typing import Literal
 from lib.utils.logger import create_logger
 from lib.utils.Socket import Socket
 from lib.common.Upload import Upload
-from lib.utils.constants import DEFAULT_PORT, DEFAULT_HOST, CLIENT_STORAGE
+from lib.utils.constants import DEFAULT_PORT, DEFAULT_HOST
 from lib.common.Download import Download
 from lib.utils.enums import Protocol
 

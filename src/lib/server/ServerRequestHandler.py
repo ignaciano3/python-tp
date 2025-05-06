@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 from io import BufferedRandom
 import logging
-import os
 from lib.utils.types import REQUEST
-from lib.utils.constants import OPERATION, SEPARATOR, BUFSIZE
+from lib.utils.constants import OPERATION, BUFSIZE
 from lib.utils.types import ADDR
 from lib.packages.InitPackage import InitPackage
 from lib.utils.enums import PackageType
@@ -18,7 +17,6 @@ from lib.packages.FinPackage import FinPackage
 class ClientInfo:
     addr: ADDR
     operation: OPERATION
-    file_descriptor: int
     last_package_type: PackageType
     filename: str
     file: BufferedRandom | None = None
@@ -51,23 +49,10 @@ class ServerRequestHandler:
                     f"Received unexpected package from {addr_str}: {package}"
                 )
                 return
-            
-            file_path = f"{self.server_storage}/{package.get_file_name_without_extension()}.{package.get_file_extension()}"
-            if package.operation == "upload":
-                file_descriptor = os.open(
-                    file_path,
-                    os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                )
-            else:
-                # Open existing file for reading
-                file_descriptor = os.open(
-                    file_path,
-                    os.O_RDONLY,
-                )
+
             self.clients[addr_str] = ClientInfo(
                 addr=addr,
                 operation=package.operation,
-                file_descriptor=file_descriptor,
                 last_package_type=PackageType.INIT,
                 filename=package.file_name,
             )
@@ -85,7 +70,9 @@ class ServerRequestHandler:
             if client_info.operation == "download":
                 self.handle_download_request(package, client_info)
             else:
-                self.logger.info("[REQUEST HANDLER] Unexpected ACK during upload (ignored)")
+                self.logger.info(
+                    "[REQUEST HANDLER] Unexpected ACK during upload (ignored)"
+                )
         elif isinstance(package, FinPackage):
             self.handle_finish_request(client_info)
         else:
@@ -94,7 +81,6 @@ class ServerRequestHandler:
             )
 
     def handle_upload_request(self, package: DataPackage, client_info: ClientInfo):
-
         if client_info.file is None:
             file = open(f"{self.server_storage}/{client_info.filename}", "ab+")
             client_info.file = file
@@ -108,13 +94,13 @@ class ServerRequestHandler:
         self.send_ack(client_info.addr, int(package.sequence_number))
 
     def handle_download_request(self, package: AckPackage, client_info: ClientInfo):
-        file_descriptor = client_info.file_descriptor
+        if client_info.file is None:
+            file = open(f"{self.server_storage}/{client_info.filename}", "rb+")
+            client_info.file = file
+        else:
+            file = client_info.file
 
-        if file_descriptor is None:
-            self.logger.error("No file descriptor available for download.")
-            return
-
-        chunk = os.read(file_descriptor, BUFSIZE - 50)
+        chunk = file.read(BUFSIZE - 50)
 
         if not chunk:
             self.logger.info(f"File transfer finished for {client_info.addr}")
@@ -130,7 +116,6 @@ class ServerRequestHandler:
     def handle_finish_request(self, client_info: ClientInfo):
         self.logger.warning(f"File transfer finished from {client_info.addr}")
         self.send_ack(client_info.addr)
-        os.close(client_info.file_descriptor)
 
         if client_info.file:
             client_info.file.close()
