@@ -41,7 +41,12 @@ class Upload:
         # Enviar el header de la carga de archivo
         header = UploadHeader(file_name)
         self.socket.sendto(header, self.server_addr)
-        self.socket.recv()  # Esperar respuesta de servidor
+
+        try:
+            self.socket.recv()
+        except Exception as e:
+            self.logger.error(f"Error al conectarse al servidor: {e}")
+            return
 
         ## Protocolo ///
 

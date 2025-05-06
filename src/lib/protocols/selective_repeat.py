@@ -55,7 +55,7 @@ class SelectiveRepeatProtocol:
 
     def _send_package(self, package: DataPackage) -> None:
         self.socket.sendto(package, self.server_addr)
-        self.logger.debug(f"Enviando paquete: {package.sequence_number}")
+        self.logger.debug(f"Enviando paquete: {package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})")
         self.window.items.append(WindowItem(package.sequence_number, package.data))
         self.last_sequence_number += 1
 
@@ -67,10 +67,14 @@ class SelectiveRepeatProtocol:
         if not isinstance(ack, AckPackage):
             return
 
-        self.logger.debug(f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})")
+        self.logger.debug(
+            f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
+        )
         # Si el número de secuencia no coincide, vuelve a enviar el paquete
         if ack.sequence_number != self.first_sequence_number:
-            self.logger.debug(f"ACK no coincide: {ack.sequence_number} != {self.first_sequence_number}")
+            self.logger.debug(
+                f"ACK no coincide: {ack.sequence_number} != {self.first_sequence_number}"
+            )
             # Setear el ack en el item con ese número de secuencia
 
             for item in self.window.items:
@@ -78,14 +82,11 @@ class SelectiveRepeatProtocol:
                     item.acked = True
                     break
         else:
-            self.window.items.remove(
-                next(
-                    item
-                    for item in self.window.items
-                    if item.sequence_number == ack.sequence_number
-                )
-            )
+            first_package = self.window.items[0]
+            if first_package.sequence_number != ack.sequence_number:
+                raise ValueError("El primer paquete no coincide con el ACK recibido")
+            self.window.items.remove(first_package)
             self.first_sequence_number += 1
 
-    def receive(self, file: BufferedWriter):
+    def receive(self, file: BufferedWriter) -> None:
         pass
