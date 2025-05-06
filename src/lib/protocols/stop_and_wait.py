@@ -35,8 +35,10 @@ class StopAndWaitProtocol:
         # Espera la confirmación (ACK)
         ack = None
         try:
-            self.socket.settimeout(10)  # Timeout de 1 segundo
+            self.socket.settimeout(5000)  # Timeout de 1 segundo
             ack, _ = self.socket.recv()
+            if not ack.valid:
+                raise TimeoutError
         except TimeoutError:
             print("Timeout alcanzado. Reintentando...")
             self.tries += 1
