@@ -11,3 +11,7 @@ class FinPackage(Package):
 
     def to_bytes(self) -> bytes:
         return f"{self.type.value}{SEPARATOR}".encode("utf-8")
+
+    @classmethod
+    def from_bytes(cls, raw: bytes) -> "FinPackage":
+        return cls()
