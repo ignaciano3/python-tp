@@ -12,6 +12,10 @@ from threading import Thread, Event
 from typing import Optional
 import heapq
 
+from lib.packages.NackPackage import NackPackage
+from lib.packages.Package import Package
+from lib.utils.package_error import ChecksumErr, PackageErr
+
 
 @dataclass
 class WindowItem:
@@ -74,6 +78,14 @@ class SelectiveRepeatProtocol:
 
     # ---------------------------- SEND ---------------------------- #
 
+    def get_item(self, seq_number: int) -> WindowItem:
+        for item in self.window.items:
+            if item.sequence_number == seq_number:
+                return item
+        raise ValueError(
+            f"El paquete con seq_number {seq_number} no se encuentra en la ventana."
+        )
+    
     def send(self, file: BufferedReader) -> None:
         finished = False
         while not finished:
@@ -144,12 +156,9 @@ class SelectiveRepeatProtocol:
             f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
         )
 
-        for item in self.window.items:
-            if item.sequence_number == ack.sequence_number:
-                item.acked = True
-                if item.stop_event:  ### NUEVO TIMER
-                    item.stop_event.set()  ### NUEVO TIMER
-                break
+        item = self.get_item(ack.sequence_number)
+        if item.stop_event:  ### NUEVO TIMER
+            item.stop_event.set()
 
         if ack.sequence_number != self.first_sequence_number:
             self.logger.debug(
@@ -194,35 +203,53 @@ class SelectiveRepeatProtocol:
         finished = False
 
         while not finished:
+            finished, seq_number = self._receive_data(file)
+            self._send_ack(seq_number)
+    
+    def _receive_data(self, file: BufferedWriter, retries = 0) -> tuple[bool, int]:
+        if retries >= self.max_tries:
+            self.logger.error("Número máximo de reintentos alcanzado. Abortando.")
+            raise Exception("Número máximo de reintentos alcanzado. Abortando.")
+
+        package = None
+        try:
             package, _ = self.socket.recv()
-            if isinstance(package, DataPackage):
-                finished = self._receive_aux(package, file)
-            elif package.type == PackageType.FIN or package.data is None:
-                file.flush()
-                return
-            else:
-                self.logger.warning(f"Paquete inesperado recibido: {package}")
-
-    def _receive_aux(self, package: DataPackage, file: BufferedWriter) -> bool:
-        # self.logger.debug(f"Recibiendo paquete type:{package.type.name}")
-
+        except (PackageErr, ChecksumErr, TimeoutError):
+            self.logger.error("Timeout esperando paquete")
+            self.tries += 1
+            self._send_nack(self.first_sequence_number)
+            self._receive_data(file, retries + 1)
+        except Exception as e:
+            self.logger.error(f"Error inesperado al recibir el paquete: {e}")
+            self.tries += 1
+            raise
+        
+        if package is None:
+            return (False, 0)
+        
+        if package.type == PackageType.FIN or package.data is None:
+            file.flush()
+            return (True, package.sequence_number)
+        
         if not package.valid:
-            self.logger.warning(f"Paquete con checksum invalido: {package}")
-            ack_package = AckPackage(package.sequence_number, False)
+            ack_package = NackPackage(package.sequence_number)
             self.socket.sendto(ack_package, self.server_addr)
-            return False
 
+            return self._receive_data(file, retries + 1)
+        
         if package.type != PackageType.DATA:
             raise Exception("El paquete recibido no es un DataPackage.")
-
+        
         file.write(package.data)
+        return (False, package.sequence_number)
 
-        ack_package = AckPackage(self.sequence_number)  # type: ignore
-        # self.logger.debug(f"Enviando ACK con sequence number {self.sequence_number}")
+    def _send_ack(self, seq_number: int) -> None:
+        ack_package = AckPackage(seq_number)
         self.socket.sendto(ack_package, self.server_addr)
-        self.sequence_number += 1
-        return False
-
+    
+    def _send_nack(self, seq_number: int) -> None:
+        nack_package = NackPackage(seq_number)
+        self.socket.sendto(nack_package, self.server_addr)
     # ---------------------------- SERVER ---------------------------- #
 
     def send_chunk(self, chunk: bytes) -> None:

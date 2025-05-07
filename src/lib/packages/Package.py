@@ -26,6 +26,12 @@ class Package:
     def get_checksum(self) -> int:
         if self.data is None:
             return 0
+
+        # TODO: SACAR
+        if random.randint(0, 100) < 50:
+            self.data = b"corrupted_data"
+            self.valid = False
+
         return sum(self.data) % 256
 
     def to_bytes(self) -> bytes:

@@ -15,6 +15,7 @@ from lib.packages.FinPackage import FinPackage
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
 from typing import Optional, IO
 from lib.utils.enums import Protocol
+from lib.packages.NackPackage import NackPackage
 
 
 @dataclass
@@ -26,6 +27,7 @@ class ClientInfo:
     protocol: SelectiveRepeatProtocol
     file: BufferedRandom | None = None
     seq_number: int = 0
+
 
 
 class ServerRequestHandler:
@@ -94,6 +96,9 @@ class ServerRequestHandler:
             self.send_init_response(client_info)
         elif isinstance(package, DataPackage):
             self.handle_upload_request(package, client_info)
+        elif isinstance(package, NackPackage):
+            item = client_info.protocol.get_item(package.sequence_number)
+            self.socket.sendto(DataPackage(item.data, item.sequence_number), client_info.addr)
         elif isinstance(package, AckPackage):
             if client_info.operation == "download":
                 try:
