@@ -26,7 +26,14 @@ class Window:
 
 
 class SelectiveRepeatProtocol:
-    def __init__(self, socket: Socket, server_addr: ADDR, window_size: int = 5):
+    def __init__(
+        self,
+        socket: Socket,
+        server_addr: ADDR,
+        window_size: int = 5,
+        from_stop_and_wait: bool = False,
+    ) -> None:
+        self.from_stop_and_wait = from_stop_and_wait
         self.socket = socket
         self.server_addr = server_addr
         self.window = Window(window_size)
@@ -61,10 +68,16 @@ class SelectiveRepeatProtocol:
         self.logger.debug(
             f"Enviando paquete: {package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
         )
+
+    def obtener_proximo_seq_number(self, seq_number: int) -> int:
+        if self.from_stop_and_wait:
+            return seq_number ^ 1
+        else:
+            return seq_number + 1
         
     def agregar_paquete_al_window(self, package: DataPackage) -> None:
         self.window.items.append(WindowItem(package.sequence_number, package.data))
-        self.last_sequence_number += 1
+        self.last_sequence_number = self.obtener_proximo_seq_number(self.last_sequence_number)
 
     def _receive_ack(self) -> None:
         if self.tries >= self.max_tries:
@@ -72,7 +85,7 @@ class SelectiveRepeatProtocol:
             raise Exception("Número máximo de reintentos alcanzado. Abortando.")
 
         # Espera la confirmación (ACK)
-        self.socket.settimeout(1)  # Timeout de 1 segundo
+        self.socket.settimeout(10)  # Timeout de 1 segundo
         try:
             ack, _ = self.socket.recv()
         except TimeoutError:
@@ -108,17 +121,17 @@ class SelectiveRepeatProtocol:
             )
         else:
             first_package = self.window.items[0]
-            if first_package.sequence_number <= ack.sequence_number:
+            if first_package.sequence_number < ack.sequence_number:
                 self.logger.warning(
                     f"El servidor mando un paquete con seq_number {first_package.sequence_number} que no esta en la ventana"
                 )
                 # raise ValueError("El primer paquete no coincide con el ACK recibido")
                 return
-            
-            self.window.items.remove(first_package)
-            self.first_sequence_number += 1
 
-            if self.window.length() > 0:
+            self.window.items.remove(first_package)
+            self.first_sequence_number = self.obtener_proximo_seq_number(self.first_sequence_number)
+
+            if not self.from_stop_and_wait and self.window.length() > 0:
                 self._actualizar_window()
 
     def _actualizar_window(self) -> None:
