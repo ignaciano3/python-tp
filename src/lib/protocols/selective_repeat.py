@@ -55,7 +55,9 @@ class SelectiveRepeatProtocol:
 
     def _send_package(self, package: DataPackage) -> None:
         self.socket.sendto(package, self.server_addr)
-        self.logger.debug(f"Enviando paquete: {package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})")
+        self.logger.debug(
+            f"Enviando paquete: {package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
+        )
         self.window.items.append(WindowItem(package.sequence_number, package.data))
         self.last_sequence_number += 1
 
@@ -70,23 +72,37 @@ class SelectiveRepeatProtocol:
         self.logger.debug(
             f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
         )
-        # Si el número de secuencia no coincide, vuelve a enviar el paquete
+
+        for item in self.window.items:
+            if item.sequence_number == ack.sequence_number:
+                item.acked = True
+                break
+
         if ack.sequence_number != self.first_sequence_number:
             self.logger.debug(
                 f"ACK no coincide: {ack.sequence_number} != {self.first_sequence_number}"
             )
-            # Setear el ack en el item con ese número de secuencia
-
-            for item in self.window.items:
-                if item.sequence_number == ack.sequence_number:
-                    item.acked = True
-                    break
         else:
             first_package = self.window.items[0]
             if first_package.sequence_number != ack.sequence_number:
                 raise ValueError("El primer paquete no coincide con el ACK recibido")
             self.window.items.remove(first_package)
             self.first_sequence_number += 1
+
+            if self.window.length() > 0:
+                self._actualizar_window()
+
+    def _actualizar_window(self) -> None:
+        first_package = self.window.items[0]
+
+        if first_package.acked:
+            # caso en que llego en desorden algun paquete
+            self.window.items.remove(first_package)
+            self.logger.warning(
+                f"Remuevo el paquete rezagado con seq_number {first_package.sequence_number} con ack true en la ventana"
+            )
+            self.first_sequence_number += 1
+            self._actualizar_window()
 
     def receive(self, file: BufferedWriter) -> None:
         pass

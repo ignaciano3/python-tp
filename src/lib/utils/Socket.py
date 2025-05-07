@@ -25,7 +25,6 @@ class Socket:
     def recv(self, bufsize=BUFSIZE) -> tuple[Package, tuple[str, int]]:
         self.logger.debug(f"Receiving data with buffer size {bufsize}")
         try:
-            # TODO------- HAGO QUE FALLEN EL 100% DE LOS PAQUETES -------
             received = self.socket.recvfrom(bufsize)
             
             package_raw = received[0]
