@@ -14,9 +14,11 @@ class Socket:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.logger = create_logger("socket", "[SOCKET]", logging_level)
 
-    def bind(self, host: str, port: int) -> None:
-        self.logger.debug(f"Binding socket to {host}:{port}")
+    def bind(self, host: str, port: int) -> int:
         self.socket.bind((host, port))
+        name = self.socket.getsockname()
+        self.logger.debug(f"Socket bound to {name[0]}:{name[1]}")
+        return name[1]
 
     def sendto(self, package: Package, addr: tuple[str, int]) -> None:
         self.logger.debug(f"Sending data to {addr}")

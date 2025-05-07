@@ -27,7 +27,7 @@ class Server:
 
     def bind_socket(self) -> None:
         try:
-            self.socket.bind(self.host, self.port)
+            self.port = self.socket.bind(self.host, self.port)
         except OSError as e:
             self.logger.error(f"Error binding socket: {e}")
             raise
