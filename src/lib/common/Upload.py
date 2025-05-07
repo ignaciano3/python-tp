@@ -5,8 +5,6 @@ from lib.utils.types import ADDR
 from lib.packages.InitPackage import UploadHeader
 from lib.utils.logger import create_logger
 from lib.packages.FinPackage import FinPackage
-from lib.packages.DataPackage import DataPackage
-from lib.utils.constants import BUFSIZE
 from lib.protocols.stop_and_wait import StopAndWaitProtocol
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
 from lib.utils.enums import Protocol
@@ -36,6 +34,10 @@ class Upload:
             raise ValueError("Unsupported protocol")
 
     def start(self) -> None:
+        if not os.path.isfile(self.file_path):
+            self.logger.error(f"No se encontró el archivo: {self.file_path}")
+            return
+
         file_name = os.path.basename(self.file_path)
 
         # Enviar el header de la carga de archivo

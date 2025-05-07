@@ -17,6 +17,8 @@ if __name__ == "__main__":
     port: int = args.port
     protocol: Protocol = args.protocol
     destination: str = args.dst
+    file_name: str = args.name
+    file_path: str = destination + "/" + file_name
 
     if args.verbose:
         logging_level = logging.DEBUG
@@ -25,4 +27,4 @@ if __name__ == "__main__":
     else:
         logging_level = logging.INFO
 
-    download(destination, host, port, protocol, logging_level)
+    download(file_path, host, port, protocol, logging_level)

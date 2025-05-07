@@ -4,6 +4,7 @@ import logging
 from lib.utils.types import REQUEST
 from lib.utils.constants import OPERATION, BUFSIZE
 from lib.utils.types import ADDR
+import os
 from lib.packages.InitPackage import InitPackage
 from lib.utils.enums import PackageType
 from lib.utils.logger import create_logger
@@ -61,6 +62,13 @@ class ServerRequestHandler:
                 server_addr=addr,
                 window_size=5,
             )
+
+            if package.operation == "download" and not os.path.exists(
+                package.file_name
+            ):
+                self.logger.error(f"Archivo no existe: {package.file_name}")
+                self.send_fin(addr)
+                return
 
             self.clients[addr_str] = ClientInfo(
                 addr=addr,
@@ -130,8 +138,15 @@ class ServerRequestHandler:
 
         if package.valid:
             if client_info.file is None:
-                file = open(f"{self.server_storage}/{client_info.filename}", "rb+")
-                client_info.file = file
+                try:
+                    file = open(f"{self.server_storage}/{client_info.filename}", "rb+")
+                    client_info.file = file
+                except FileNotFoundError:
+                    self.logger.error(
+                        f"File not found: {client_info.filename} for {client_info.addr}"
+                    )
+                    self.send_fin(client_info.addr)
+                    return
             else:
                 file = client_info.file
 
@@ -196,8 +211,17 @@ class ServerRequestHandler:
                 # enviamos un nuevo paquete
 
                 if client_info.file is None:
-                    file = open(f"{self.server_storage}/{client_info.filename}", "rb+")
-                    client_info.file = file
+                    try:
+                        file = open(
+                            f"{self.server_storage}/{client_info.filename}", "rb+"
+                        )
+                        client_info.file = file
+                    except FileNotFoundError:
+                        self.logger.error(
+                            f"File not found: {client_info.filename} for {client_info.addr}"
+                        )
+                        self.send_fin(client_info.addr)
+                        return
                 else:
                     file = client_info.file
 
