@@ -173,6 +173,10 @@ class SelectiveRepeatProtocol:
                 self._actualizar_window()
 
     def _actualizar_window(self) -> None:
+        if self.window.length() == 0:
+            self.logger.warning("No hay paquetes en la ventana para actualizar.")
+            return
+
         first_package = self.window.items[0]
 
         if first_package.acked:
