@@ -8,7 +8,13 @@ from lib.utils.enums import Protocol
 def start_server(
     host: str, port: int, storage_path: str, protocol: Protocol, logging_level: int
 ):
-    server = Server(host, port, protocol, storage_path, logging_level)
+    server = Server(
+        host=host,
+        port=port,
+        protocol=protocol,
+        server_storage=storage_path,
+        logging_level=logging_level,
+    )
     server.start()
 
 

@@ -11,8 +11,8 @@ class Server:
     def __init__(
         self,
         host: str,
+        protocol: Protocol,
         port: int = 8080,
-        protocol: Protocol = Protocol.STOP_WAIT,
         server_storage=SERVER_STORAGE,
         logging_level=logging.DEBUG,
     ) -> None:

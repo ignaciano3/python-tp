@@ -15,6 +15,7 @@ class WindowItem:
     sequence_number: int
     data: bytes
     acked: bool = False
+    retries_left: int = 4  # una menos que max_retries
 
 
 class Window:
@@ -39,14 +40,19 @@ class SelectiveRepeatProtocol:
         server_addr: ADDR,
         window_size: int = 5,
         from_stop_and_wait: bool = False,
+        logger: logging.Logger | None = None,
     ) -> None:
         self.from_stop_and_wait = from_stop_and_wait
         self.socket = socket
         self.server_addr = server_addr
         self.window = Window(window_size)
-        self.logger = create_logger(
-            "selective_repeat", "[SELECTED REPEAT]", logging.DEBUG
-        )
+
+        if logger is None:
+            logger = create_logger(
+                "selective_repeat", "[SELECTIVE REPEAT]", logging.DEBUG
+            )
+        self.logger = logger
+
         self.last_sequence_number = 0
         self.first_sequence_number = 0
         self.tries = 0
@@ -159,7 +165,7 @@ class SelectiveRepeatProtocol:
                 f"Remuevo el paquete rezagado con seq_number {first_package.sequence_number} con ack true en la ventana"
             )
             self.first_sequence_number += 1
-            self._actualizar_window()
+            self._actualizar_window()  ###################33 esta bien esto?
 
     # ---------------------------- RECEIVE ---------------------------- #
 
@@ -203,6 +209,10 @@ class SelectiveRepeatProtocol:
             f"Mandando chunk: {chunk[:10]}... con seq_num {self.last_sequence_number}"
         )
         data_package = DataPackage(chunk, self.last_sequence_number)
+
+        #### NUEVO TIMER (FALTABA AGREGAR A VENTANA)
+        self.window.items.append(WindowItem(data_package.sequence_number, chunk))
+
         self._send_package(data_package)
         self.agregar_paquete_al_window(data_package)
 
@@ -229,3 +239,25 @@ class SelectiveRepeatProtocol:
             if item.sequence_number == seq_num:
                 return True
         return False
+
+    def resend_package(self, seq_num: int) -> bool:
+        for item in self.window.items:
+            if item.sequence_number == seq_num:
+                if item.retries_left <= 0:
+                    self.logger.error(
+                        f"Paquete con seq_num {seq_num} ha alcanzado el número máximo de reintentos."
+                    )
+                    return False
+                item.retries_left -= 1
+                data_package = DataPackage(item.data, seq_num)
+                self._send_package(data_package)
+                self.logger.debug(
+                    f"Reenviando paquete: {data_package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
+                )
+                break
+        else:
+            self.logger.warning(
+                f"Paquete con seq_num {seq_num} no encontrado en la ventana"
+            )
+            return False
+        return True

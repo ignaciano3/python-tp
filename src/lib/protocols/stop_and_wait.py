@@ -5,6 +5,8 @@ from lib.utils.Socket import Socket
 from lib.packages.Package import Package
 from lib.utils.enums import PackageType
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
+from lib.utils.logger import create_logger
+import logging
 
 
 class StopAndWaitProtocol:
@@ -13,9 +15,14 @@ class StopAndWaitProtocol:
         self.server_addr = server_addr
         self.sequence_number = 0
         self.tries = 0
+        self.logger = create_logger(
+            "selective_repeat", "[STOP AND WAIT]", logging.DEBUG
+        )
 
     def send(self, file: BufferedReader) -> None:
-        SelectiveRepeatProtocol(self.socket, self.server_addr, 1, True).send(file)
+        SelectiveRepeatProtocol(
+            self.socket, self.server_addr, 1, True, self.logger
+        ).send(file)
 
     def receive(self, file: BufferedWriter) -> None:
         finished = False

@@ -211,14 +211,16 @@ class ServerRequestHandler:
         if file is None:
             return
 
-        # si checksum no es correcto, lo ignoro
-        if not package.valid:
-            self.logger.warning(f"ACK con checksum invalido: {package}")
-            return
-
         # se chequea si ack esta dentro de la ventana, si no se ignora
         # ventana se avanza si el ack es el primero
         if not client_info.protocol.ack_received(package.sequence_number):
+            return
+
+        # si ACK no es valido (NAK), hay que reenviar
+        if not package.valid:
+            self.logger.warning(f"Llego un NAK: {package}")
+            if not client_info.protocol.resend_package(package.sequence_number):
+                self.send_fin(client_info.addr)
             return
 
         # si el ack no es el primero de la ventana, no avanzo vntana pero mando chunk
