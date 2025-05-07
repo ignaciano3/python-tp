@@ -119,7 +119,7 @@ class ServerRequestHandler:
 
         file.write(package.data)
 
-        # self.logger.debug(f"File written successfully from {client_info.addr}")
+        self.logger.debug(f"File written successfully from {client_info.addr}")
 
         self.send_ack(client_info.addr, int(package.sequence_number))
 
@@ -206,7 +206,6 @@ class ServerRequestHandler:
     def handle_download_request_selectiverepeat(
         self, package: AckPackage, client_info: ClientInfo
     ) -> None:
-        # self.logger.warning(f"Llego ACK con seq: {package.sequence_number}")
         file = self._get_file_open(client_info)
         if file is None:
             return
@@ -229,7 +228,7 @@ class ServerRequestHandler:
 
         # si el ack no es el primero de la ventana, no avanzo vntana pero mando chunk
         if not client_info.protocol.first_sequence_number > package.sequence_number:
-            self.logger.warning(
+            self.logger.debug(
                 f"Llego ACK {package.sequence_number} antes que ACK {client_info.protocol.first_sequence_number}"
             )
 

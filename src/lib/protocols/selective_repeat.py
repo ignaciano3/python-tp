@@ -93,9 +93,9 @@ class SelectiveRepeatProtocol:
 
     def _send_package(self, package: DataPackage) -> None:
         self.socket.sendto(package, self.server_addr)
-        # self.logger.debug(
-        # f"Enviando paquete: {package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
-        # )
+        self.logger.debug(
+            f"Enviando paquete: {package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
+        )
 
     def obtener_proximo_seq_number(self, seq_number: int) -> int:
         if self.from_stop_and_wait:
@@ -139,9 +139,9 @@ class SelectiveRepeatProtocol:
         if not isinstance(ack, AckPackage):
             return
 
-        # self.logger.debug(
-        #     f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
-        # )
+        self.logger.debug(
+            f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
+        )
 
         for item in self.window.items:
             if item.sequence_number == ack.sequence_number:
@@ -221,13 +221,10 @@ class SelectiveRepeatProtocol:
     # ---------------------------- SERVER ---------------------------- #
 
     def send_chunk(self, chunk: bytes) -> None:
-        # self.logger.debug(
-        #     f"Mandando chunk: {chunk[:10]}... con seq_num {self.last_sequence_number}"
-        # )
+        self.logger.debug(
+            f"Mandando chunk: {chunk[:10]}... con seq_num {self.last_sequence_number}"
+        )
         data_package = DataPackage(chunk, self.last_sequence_number)
-
-        #### NUEVO TIMER (FALTABA AGREGAR A VENTANA)
-        # self.window.items.append(WindowItem(data_package.sequence_number, chunk))
 
         self._send_package(data_package)
         self.agregar_paquete_al_window(data_package)
