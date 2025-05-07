@@ -4,8 +4,6 @@ from lib.utils.types import ADDR
 from lib.utils.Socket import Socket
 from lib.packages.Package import Package
 from lib.utils.enums import PackageType
-from lib.packages.DataPackage import DataPackage
-from lib.utils.constants import BUFSIZE
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
 
 
@@ -19,20 +17,22 @@ class StopAndWaitProtocol:
     def send(self, file: BufferedReader) -> None:
         SelectiveRepeatProtocol(self.socket, self.server_addr, 1, True).send(file)
 
-
     def receive(self, file: BufferedWriter) -> None:
         finished = False
 
         while not finished:
             package, _ = self.socket.recv()
-
             finished = self._receive_aux(package, file)
 
-    def _receive_aux(self, package: Package, file: BufferedWriter) -> bool:           
-        # 3. Recibe el paquete del socket
+    def _receive_aux(self, package: Package, file: BufferedWriter) -> bool:
         if package.type == PackageType.FIN or package.data is None:
             file.flush()
             return True
+
+        if not package.valid:
+            ack_package = AckPackage(self.sequence_number, False)
+            self.socket.sendto(ack_package, self.server_addr)
+            return False
 
         if package.type != PackageType.DATA:
             raise Exception("El paquete recibido no es un DataPackage.")

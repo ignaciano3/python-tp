@@ -15,7 +15,9 @@ if __name__ == "__main__":
     host: str = args.host
     port: int = args.port
     protocol: Literal[0, 1] = args.protocol
-    file_path: str = args.src
+    file_name: str = args.name
+    file_source: str = args.src
+    file_path: str = file_source + "/" + file_name
 
     if args.verbose:
         logging_level = logging.DEBUG
