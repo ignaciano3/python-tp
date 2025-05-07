@@ -13,9 +13,9 @@ optional arguments :
 """
 
 from argparse import ArgumentParser
+from lib.utils.enums import Protocol
 
 from lib.utils.constants import DEFAULT_PORT, LOCALHOST, SERVER_STORAGE
-from lib.utils.enums import Protocol
 
 parser = ArgumentParser(
     description="Start a server to receive files using a specified protocol."
@@ -48,6 +48,6 @@ parser.add_argument(
     "-r",
     "--protocol",
     default=Protocol.STOP_WAIT,
-    type=str,
+    type=int,
     help="error recovery protocol",
 )

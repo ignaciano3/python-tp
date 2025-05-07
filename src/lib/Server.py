@@ -25,6 +25,8 @@ class Server:
         self.server_storage = server_storage
         self.protocol = protocol
 
+        print("EL PROTOCOLO ES: ", self.protocol)
+
     def bind_socket(self) -> None:
         try:
             self.socket.bind(self.host, self.port)

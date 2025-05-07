@@ -93,9 +93,9 @@ class SelectiveRepeatProtocol:
 
     def _send_package(self, package: DataPackage) -> None:
         self.socket.sendto(package, self.server_addr)
-        self.logger.debug(
-            f"Enviando paquete: {package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
-        )
+        # self.logger.debug(
+        # f"Enviando paquete: {package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
+        # )
 
     def obtener_proximo_seq_number(self, seq_number: int) -> int:
         if self.from_stop_and_wait:
@@ -139,9 +139,9 @@ class SelectiveRepeatProtocol:
         if not isinstance(ack, AckPackage):
             return
 
-        self.logger.debug(
-            f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
-        )
+        # self.logger.debug(
+        #     f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
+        # )
 
         for item in self.window.items:
             if item.sequence_number == ack.sequence_number:
@@ -199,7 +199,7 @@ class SelectiveRepeatProtocol:
                 self.logger.warning(f"Paquete inesperado recibido: {package}")
 
     def _receive_aux(self, package: DataPackage, file: BufferedWriter) -> bool:
-        self.logger.debug(f"Recibiendo paquete type:{package.type.name}")
+        # self.logger.debug(f"Recibiendo paquete type:{package.type.name}")
 
         if not package.valid:
             self.logger.warning(f"Paquete con checksum invalido: {package}")
@@ -213,7 +213,7 @@ class SelectiveRepeatProtocol:
         file.write(package.data)
 
         ack_package = AckPackage(self.sequence_number)  # type: ignore
-        self.logger.debug(f"Enviando ACK con sequence number {self.sequence_number}")
+        # self.logger.debug(f"Enviando ACK con sequence number {self.sequence_number}")
         self.socket.sendto(ack_package, self.server_addr)
         self.sequence_number += 1
         return False
@@ -221,9 +221,9 @@ class SelectiveRepeatProtocol:
     # ---------------------------- SERVER ---------------------------- #
 
     def send_chunk(self, chunk: bytes) -> None:
-        self.logger.debug(
-            f"Mandando chunk: {chunk[:10]}... con seq_num {self.last_sequence_number}"
-        )
+        # self.logger.debug(
+        #     f"Mandando chunk: {chunk[:10]}... con seq_num {self.last_sequence_number}"
+        # )
         data_package = DataPackage(chunk, self.last_sequence_number)
 
         #### NUEVO TIMER (FALTABA AGREGAR A VENTANA)

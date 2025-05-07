@@ -24,10 +24,10 @@ if __name__ == "__main__":
 
     host, port, storage, protocol = args.host, args.port, args.storage, args.protocol
 
-    if protocol == "selective_repeat":
-        protocol = Protocol.SELECTIVE_REPEAT
+    if protocol == 1:
+        protocol_handler = Protocol.SELECTIVE_REPEAT
     else:
-        protocol = Protocol.STOP_WAIT
+        protocol_handler = Protocol.STOP_WAIT
 
     if args.verbose:
         logging_level = logging.DEBUG
@@ -37,4 +37,4 @@ if __name__ == "__main__":
         logging_level = logging.INFO
 
     # start server
-    start_server(host, port, storage, protocol, logging_level)
+    start_server(host, port, storage, protocol_handler, logging_level)

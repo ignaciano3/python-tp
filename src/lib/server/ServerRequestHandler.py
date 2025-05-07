@@ -47,7 +47,7 @@ class ServerRequestHandler:
         self.first_window_sent = False
 
     def handle_request(self, request: REQUEST):
-        self.logger.info(f"Handling request: {request}")
+        # self.logger.info(f"Handling request: {request}")
         package, addr = request
 
         addr_str = f"{addr[0]}:{addr[1]}"
@@ -119,7 +119,7 @@ class ServerRequestHandler:
 
         file.write(package.data)
 
-        self.logger.info(f"File written successfully from {client_info.addr}")
+        # self.logger.debug(f"File written successfully from {client_info.addr}")
 
         self.send_ack(client_info.addr, int(package.sequence_number))
 
@@ -189,7 +189,7 @@ class ServerRequestHandler:
     def send_ack(self, addr: ADDR, seq_num: int = 0):
         ack_package = AckPackage(seq_num)
         self.socket.sendto(ack_package, addr)
-        self.logger.info(f"ACK sent to {addr} with seq_num {seq_num}")
+        # self.logger.info(f"ACK sent to {addr} with seq_num {seq_num}")
 
     def send_nack(self, addr: ADDR, seq_num: int = 0):
         nack_package = AckPackage(seq_num)
@@ -206,7 +206,7 @@ class ServerRequestHandler:
     def handle_download_request_selectiverepeat(
         self, package: AckPackage, client_info: ClientInfo
     ) -> None:
-        self.logger.warning(f"Llego ACK con seq: {package.sequence_number}")
+        # self.logger.warning(f"Llego ACK con seq: {package.sequence_number}")
         file = self._get_file_open(client_info)
         if file is None:
             return
