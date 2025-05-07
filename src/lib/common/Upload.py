@@ -29,9 +29,13 @@ class Upload:
         self.sequence_number = 0
 
         if protocol.value == Protocol.STOP_WAIT.value:
-            self.protocol_handler = StopAndWaitProtocol(socket, server_addr)
+            self.protocol_handler = StopAndWaitProtocol(
+                socket, server_addr, logging_level=logging_level
+            )
         elif protocol.value == Protocol.SELECTIVE_REPEAT.value:
-            self.protocol_handler = SelectiveRepeatProtocol(socket, server_addr)
+            self.protocol_handler = SelectiveRepeatProtocol(
+                socket, server_addr, logging_level=logging_level
+            )
         else:
             raise ValueError("Unsupported protocol")
 

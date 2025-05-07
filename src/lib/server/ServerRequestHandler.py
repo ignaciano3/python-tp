@@ -62,6 +62,7 @@ class ServerRequestHandler:
                 socket=self.socket,
                 server_addr=addr,
                 window_size=5,
+                logging_level=self.logger.level,
             )
 
             full_path = os.path.join(self.server_storage, package.file_name)

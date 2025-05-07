@@ -10,13 +10,15 @@ import logging
 
 
 class StopAndWaitProtocol:
-    def __init__(self, socket: Socket, server_addr: ADDR):
+    def __init__(
+        self, socket: Socket, server_addr: ADDR, logging_level=logging.DEBUG
+    ) -> None:
         self.socket = socket
         self.server_addr = server_addr
         self.sequence_number = 0
         self.tries = 0
         self.logger = create_logger(
-            "selective_repeat", "[STOP AND WAIT]", logging.DEBUG
+            "selective_repeat", "[STOP AND WAIT]", logging_level
         )
 
     def send(self, file: BufferedReader) -> None:

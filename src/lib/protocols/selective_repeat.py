@@ -52,6 +52,7 @@ class SelectiveRepeatProtocol:
         window_size: int = 5,
         from_stop_and_wait: bool = False,
         logger: logging.Logger | None = None,
+        logging_level: int = logging.DEBUG,
     ) -> None:
         self.from_stop_and_wait = from_stop_and_wait
         self.socket = socket
@@ -60,7 +61,7 @@ class SelectiveRepeatProtocol:
 
         if logger is None:
             logger = create_logger(
-                "selective_repeat", "[SELECTIVE REPEAT]", logging.DEBUG
+                "selective_repeat", "[SELECTIVE REPEAT]", logging_level
             )
         self.logger = logger
 
@@ -221,9 +222,6 @@ class SelectiveRepeatProtocol:
     # ---------------------------- SERVER ---------------------------- #
 
     def send_chunk(self, chunk: bytes) -> None:
-        self.logger.debug(
-            f"Mandando chunk: {chunk[:10]}... con seq_num {self.last_sequence_number}"
-        )
         data_package = DataPackage(chunk, self.last_sequence_number)
 
         self._send_package(data_package)

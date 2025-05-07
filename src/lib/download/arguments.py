@@ -22,12 +22,8 @@ parser = ArgumentParser(
     description="Start a Download Client to receive files using a specified protocol."
 )
 group = parser.add_mutually_exclusive_group(required=False)
-group.add_argument(
-    "-v", "--verbose", action="store_true", help="increase output verbosity"
-)
-group.add_argument(
-    "-q", "--quiet", action="store_true", help="decrease output verbosity"
-)
+group.add_argument("-v", "--verbose", default=False, help="increase output verbosity")
+group.add_argument("-q", "--quiet", default=False, help="decrease output verbosity")
 parser.add_argument(
     "-H", "--host", action="store_true", help="server IP address", default=LOCALHOST
 )
