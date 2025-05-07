@@ -14,8 +14,7 @@ from lib.packages.DataPackage import DataPackage
 from lib.packages.FinPackage import FinPackage
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
 from typing import Optional, IO
-
-PROTOCOL = "selective repeat"
+from lib.utils.enums import Protocol
 
 
 @dataclass
@@ -35,7 +34,7 @@ class ServerRequestHandler:
     """
 
     def __init__(
-        self, server_storage: str, socket: Socket, logging_level=logging.DEBUG
+        self, server_storage: str, socket: Socket, protocol, logging_level=logging.DEBUG
     ) -> None:
         self.clients: dict[str, ClientInfo] = {}
         self.retrys = 0
@@ -44,7 +43,7 @@ class ServerRequestHandler:
         self.logger = create_logger(
             "request-handler", "[REQUEST HANDLER]", logging_level
         )
-        self.protocol = PROTOCOL  ################################# para cambiar
+        self.protocol = protocol
         self.first_window_sent = False
 
     def handle_request(self, request: REQUEST):
@@ -125,9 +124,9 @@ class ServerRequestHandler:
         self.send_ack(client_info.addr, int(package.sequence_number))
 
     def handle_download_request(self, package: AckPackage, client_info: ClientInfo):
-        if self.protocol == "stop and wait":
+        if self.protocol == Protocol.STOP_WAIT:
             self.handle_download_request_stopnwait(package, client_info)
-        elif self.protocol == "selective repeat":
+        elif self.protocol == Protocol.SELECTIVE_REPEAT:
             if not self.first_window_sent:
                 self.first_window_sent = True
                 self._send_first_window(client_info)

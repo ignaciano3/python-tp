@@ -40,7 +40,7 @@ class Server:
         self.logger.info(f"Server storage: {self.server_storage}")
 
         request_handler = ServerRequestHandler(
-            self.server_storage, self.socket, self.logging_level
+            self.server_storage, self.socket, self.protocol, self.logging_level
         )
 
         while self.running:
