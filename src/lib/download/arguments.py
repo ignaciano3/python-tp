@@ -35,7 +35,10 @@ parser.add_argument(
     "-p", "--port", action="store_true", help="server port", default=DEFAULT_PORT
 )
 parser.add_argument(
-    "-d", "--dst", help="destination file path", default=CLIENT_STORAGE + "/xl.txt"
+    "-d",
+    "--dst",
+    help="destination file path",
+    default=CLIENT_STORAGE + "/archivo_3mb.txt",
 )
 parser.add_argument("-n", "--name", action="store_true", help="file name")
 parser.add_argument(

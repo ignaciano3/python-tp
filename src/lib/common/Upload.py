@@ -5,8 +5,6 @@ from lib.utils.types import ADDR
 from lib.packages.InitPackage import UploadHeader
 from lib.utils.logger import create_logger
 from lib.packages.FinPackage import FinPackage
-from lib.packages.DataPackage import DataPackage
-from lib.utils.constants import BUFSIZE
 from lib.protocols.stop_and_wait import StopAndWaitProtocol
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
 from lib.utils.enums import Protocol
@@ -25,7 +23,9 @@ class Upload:
         self.socket = socket
         self.server_addr = server_addr
         self.protocol = protocol
-        self.logger = create_logger("client", "[CLIENT]", logging_level)
+        self.logger = create_logger(
+            "client", f"[CLIENT socket:{self.socket}]", logging_level
+        )
         self.sequence_number = 0
 
         if protocol.value == Protocol.STOP_WAIT.value:

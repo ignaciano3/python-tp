@@ -38,7 +38,7 @@ class SelectiveRepeatProtocol:
         self.server_addr = server_addr
         self.window = Window(window_size)
         self.logger = create_logger(
-            "selective_repeat", "[SELECTIVE REPEAT]", logging.DEBUG
+            "selective_repeat", "[SELECTED REPEAT]", logging.DEBUG
         )
         self.last_sequence_number = 0
         self.first_sequence_number = 0
@@ -74,10 +74,12 @@ class SelectiveRepeatProtocol:
             return seq_number ^ 1
         else:
             return seq_number + 1
-        
+
     def agregar_paquete_al_window(self, package: DataPackage) -> None:
         self.window.items.append(WindowItem(package.sequence_number, package.data))
-        self.last_sequence_number = self.obtener_proximo_seq_number(self.last_sequence_number)
+        self.last_sequence_number = self.obtener_proximo_seq_number(
+            self.last_sequence_number
+        )
 
     def _receive_ack(self) -> None:
         if self.tries >= self.max_tries:
@@ -129,7 +131,9 @@ class SelectiveRepeatProtocol:
                 return
 
             self.window.items.remove(first_package)
-            self.first_sequence_number = self.obtener_proximo_seq_number(self.first_sequence_number)
+            self.first_sequence_number = self.obtener_proximo_seq_number(
+                self.first_sequence_number
+            )
 
             if not self.from_stop_and_wait and self.window.length() > 0:
                 self._actualizar_window()

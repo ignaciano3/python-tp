@@ -23,7 +23,7 @@ class Client:
         self.port = port
         self.operation = operation
         self.logging_level = logging_level
-        self.logger = create_logger("client", "[CLIENT]", logging_level)
+        self.logger = create_logger("client", f"[CLIENT {host}:{port}]", logging_level)
         self.socket = Socket(logging_level)
         self.file_path = file_path
         self.protocol = protocol

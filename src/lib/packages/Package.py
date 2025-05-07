@@ -31,3 +31,6 @@ class Package:
     def get_type(cls, package_raw: bytes) -> PackageType:
         package_type_raw = package_raw.decode("utf-8").split(SEPARATOR)[0]
         return PackageType(int(package_type_raw))
+
+    def __repr__(self) -> str:
+        return f"Package(type={self.type})"
