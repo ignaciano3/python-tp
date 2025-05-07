@@ -35,7 +35,7 @@ class DataPackage(Package):
 
             instance = cls(payload, sequence_number)
             if instance.get_checksum() != checksum:
-                raise ChecksumErr("Checksum does not match")
+                instance.valid = False
 
             return instance
 

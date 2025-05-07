@@ -36,6 +36,10 @@ class Upload:
             raise ValueError("Unsupported protocol")
 
     def start(self) -> None:
+        if not os.path.isfile(self.file_path):
+            self.logger.error(f"No se encontró el archivo: {self.file_path}")
+            return
+
         file_name = os.path.basename(self.file_path)
 
         # Enviar el header de la carga de archivo
