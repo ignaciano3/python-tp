@@ -6,9 +6,8 @@ from lib.utils.package_error import PackageErr
 
 class DataPackage(Package):
     def __init__(self, data: bytes, sequence_number: int):
-        super().__init__(PackageType.DATA, data)
+        super().__init__(PackageType.DATA, data, sequence_number=sequence_number)
         self.data = data
-        self.sequence_number = sequence_number
 
     def to_bytes(self) -> bytes:
         if self.data is None:

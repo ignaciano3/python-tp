@@ -50,6 +50,10 @@ class ServerRequestHandler:
         # self.logger.info(f"Handling request: {request}")
         package, addr = request
 
+        if not package.valid:
+            self.logger.error(f"Invalid package received: {package}")
+            return self.send_nack(addr, package.sequence_number)
+
         addr_str = f"{addr[0]}:{addr[1]}"
         if addr_str not in self.clients:
             if not isinstance(package, InitPackage):
