@@ -15,7 +15,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     host: str = args.host
     port: int = args.port
-    protocol: Protocol = args.protocol
+    protocol: Protocol = Protocol(args.protocol)
     destination: str = args.dst
     file_name: str = args.name
     file_path: str = destination + "/" + file_name

@@ -20,6 +20,8 @@ if __name__ == "__main__":
 
     if protocol == "selective_repeat":
         protocol = Protocol.SELECTIVE_REPEAT
+    else:
+        protocol = Protocol.STOP_WAIT
 
     if args.verbose:
         logging_level = logging.DEBUG

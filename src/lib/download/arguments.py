@@ -40,7 +40,7 @@ parser.add_argument("-n", "--name", help="file name", default="hello.txt")
 parser.add_argument(
     "-r",
     "--protocol",
-    action="store_true",
+    type=int,
     help="error recovery protocol",
     default=Protocol.STOP_WAIT,
 )

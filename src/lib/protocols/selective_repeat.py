@@ -7,7 +7,6 @@ from lib.utils.constants import BUFSIZE
 from lib.packages.DataPackage import DataPackage
 from lib.packages.AckPackage import AckPackage
 from lib.utils.logger import create_logger
-from lib.packages.Package import Package
 from lib.utils.enums import PackageType
 
 
@@ -23,10 +22,14 @@ class Window:
         self.size = size  # Número de secuencia del primer paquete en la ventana
         self.items: list[WindowItem] = []  # ACKs recibidos en la ventana
 
-        self.last_sent_chunks = {}
-
     def length(self) -> int:
         return len(self.items)
+
+    def remove_first_sent(self):
+        if self.items:
+            self.items.pop(0)
+        else:
+            raise Exception("No hay paquetes en la ventana para eliminar.")
 
 
 class SelectiveRepeatProtocol:
@@ -48,6 +51,8 @@ class SelectiveRepeatProtocol:
         self.first_sequence_number = 0
         self.tries = 0
         self.max_tries = 5
+
+        self.sequence_number = 0
 
     # ---------------------------- SEND ---------------------------- #
 
@@ -163,15 +168,20 @@ class SelectiveRepeatProtocol:
 
         while not finished:
             package, _ = self.socket.recv()
-            finished = self._receive_aux(package, file)
+            if isinstance(package, DataPackage):
+                finished = self._receive_aux(package, file)
+            elif package.type == PackageType.FIN or package.data is None:
+                file.flush()
+                return
+            else:
+                self.logger.warning(f"Paquete inesperado recibido: {package}")
 
-    def _receive_aux(self, package: Package, file: BufferedWriter) -> bool:
-        if package.type == PackageType.FIN or package.data is None:
-            file.flush()
-            return True
+    def _receive_aux(self, package: DataPackage, file: BufferedWriter) -> bool:
+        self.logger.debug(f"Recibiendo paquete type:{package.type.name}")
 
         if not package.valid:
-            ack_package = AckPackage(self.sequence_number, False)
+            self.logger.warning(f"Paquete con checksum invalido: {package}")
+            ack_package = AckPackage(package.sequence_number, False)
             self.socket.sendto(ack_package, self.server_addr)
             return False
 
@@ -181,19 +191,41 @@ class SelectiveRepeatProtocol:
         file.write(package.data)
 
         ack_package = AckPackage(self.sequence_number)  # type: ignore
+        self.logger.debug(f"Enviando ACK con sequence number {self.sequence_number}")
         self.socket.sendto(ack_package, self.server_addr)
         self.sequence_number += 1
         return False
 
     # ---------------------------- SERVER ---------------------------- #
 
-    def get_window(self) -> Window:
-        return self.window
+    def send_chunk(self, chunk: bytes) -> None:
+        self.logger.debug(
+            f"Mandando chunk: {chunk[:10]}... con seq_num {self.last_sequence_number}"
+        )
+        data_package = DataPackage(chunk, self.last_sequence_number)
+        self._send_package(data_package)
+        self.agregar_paquete_al_window(data_package)
 
-    ################### USR LOS WINDOWS INFO
-    def chunk_sent(self, chunk: bytes, seq_num: int) -> None:
-        self.window.last_sent_chunks[seq_num] = chunk
-        self.logger.debug(f"Chunk sent: {seq_num}")
+    def ack_received(self, seq_number: int) -> bool:
+        for item in self.window.items:
+            if item.sequence_number == seq_number:
+                item.acked = True
+                break
+        else:
+            self.logger.warning(
+                f"ACK recibido por paquete fuera de la ventana: {seq_number}"
+            )
+            return False
 
-    def get_chunk(self, seq_num: int) -> bytes:
-        return self.window.last_sent_chunks.get(seq_num, b"")
+        # Avanzar la ventana si el primero fue ACKed
+        while self.window.items and self.window.items[0].acked:
+            self.window.remove_first_sent()
+            self.first_sequence_number += 1
+
+        return True
+
+    def contains_seq_num(self, seq_num: int) -> bool:
+        for item in self.window.items:
+            if item.sequence_number == seq_num:
+                return True
+        return False

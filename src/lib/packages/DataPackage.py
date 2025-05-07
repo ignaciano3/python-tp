@@ -1,7 +1,7 @@
 from lib.packages.Package import Package
 from lib.utils.enums import PackageType
 from lib.utils.constants import SEPARATOR
-from lib.utils.package_error import PackageErr, ChecksumErr
+from lib.utils.package_error import PackageErr
 
 
 class DataPackage(Package):

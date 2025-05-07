@@ -13,6 +13,7 @@ from lib.packages.AckPackage import AckPackage
 from lib.packages.DataPackage import DataPackage
 from lib.packages.FinPackage import FinPackage
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
+from typing import Optional, IO
 
 PROTOCOL = "selective repeat"
 
@@ -44,6 +45,7 @@ class ServerRequestHandler:
             "request-handler", "[REQUEST HANDLER]", logging_level
         )
         self.protocol = PROTOCOL  ################################# para cambiar
+        self.first_window_sent = False
 
     def handle_request(self, request: REQUEST):
         self.logger.info(f"Handling request: {request}")
@@ -63,10 +65,11 @@ class ServerRequestHandler:
                 window_size=5,
             )
 
-            if package.operation == "download" and not os.path.exists(
-                package.file_name
-            ):
-                self.logger.error(f"Archivo no existe: {package.file_name}")
+            full_path = os.path.join(self.server_storage, package.file_name)
+            if package.operation == "download" and not os.path.exists(full_path):
+                self.logger.error(
+                    f"Archivo no existe: {package.file_name} en {self.server_storage}"
+                )
                 self.send_fin(addr)
                 return
 
@@ -125,6 +128,11 @@ class ServerRequestHandler:
         if self.protocol == "stop and wait":
             self.handle_download_request_stopnwait(package, client_info)
         elif self.protocol == "selective repeat":
+            if not self.first_window_sent:
+                self.first_window_sent = True
+                self._send_first_window(client_info)
+                return
+
             self.handle_download_request_selectiverepeat(package, client_info)
         else:
             self.logger.error(f"Unknown protocol: {self.protocol}")
@@ -199,57 +207,68 @@ class ServerRequestHandler:
     def handle_download_request_selectiverepeat(
         self, package: AckPackage, client_info: ClientInfo
     ) -> None:
-        self.send_first_window(client_info)
+        self.logger.warning(f"Llego ACK con seq: {package.sequence_number}")
+        file = self._get_file_open(client_info)
+        if file is None:
+            return
 
-        # si checksum es correcto
-        if package.valid:
-            # si seq num es el correcto (osea el primer ack de la ventana)
-            if (
-                package.sequence_number
-                == client_info.protocol.window.items[0].sequence_number
-            ):
-                # enviamos un nuevo paquete
+        # si checksum no es correcto, lo ignoro
+        if not package.valid:
+            self.logger.warning(f"ACK con checksum invalido: {package}")
+            return
 
-                if client_info.file is None:
-                    try:
-                        file = open(
-                            f"{self.server_storage}/{client_info.filename}", "rb+"
-                        )
-                        client_info.file = file
-                    except FileNotFoundError:
-                        self.logger.error(
-                            f"File not found: {client_info.filename} for {client_info.addr}"
-                        )
-                        self.send_fin(client_info.addr)
-                        return
-                else:
-                    file = client_info.file
+        # se chequea si ack esta dentro de la ventana, si no se ignora
+        # ventana se avanza si el ack es el primero
+        if not client_info.protocol.ack_received(package.sequence_number):
+            return
 
-                chunk = file.read(BUFSIZE - 50)
-                self.last_chunk = chunk
-                self.retrys = 0
-                if not chunk:
-                    self.logger.info(f"File transfer finished for {client_info.addr}")
-                    self.send_fin(client_info.addr)
-                    return
+        # si el ack no es el primero de la ventana, no avanzo vntana pero mando chunk
+        if not client_info.protocol.first_sequence_number > package.sequence_number:
+            self.logger.warning(
+                f"Llego ACK {package.sequence_number} antes que ACK {client_info.protocol.first_sequence_number}"
+            )
 
-                data_package = DataPackage(chunk, client_info.seq_number)
-                client_info.protocol._send_package(data_package)
-                client_info.protocol.window.items.pop(0)
-                client_info.protocol.last_sequence_number += 1
-                client_info.protocol.first_sequence_number += 1
-                client_info.protocol.chunk_sent(
-                    chunk, client_info.protocol.last_sequence_number
+        file = self._get_file_open(client_info)
+        if file is None:
+            return
+
+        chunk = file.read(BUFSIZE - 50)
+        if not chunk:
+            self.logger.info(f"File transfer finished for {client_info.addr}")
+            self.send_fin(client_info.addr)
+            return
+
+        client_info.protocol.send_chunk(chunk)
+
+        #### FALTA HACER CHEQUEO DE RETRIES ####
+        #### FALTA BUFFEREAR EN CASO DE TIMEOUT ####
+        #### FALTA CHEQUEAR QUE LA VNTANA NO ESTA LLENA ####
+
+    def _get_file_open(self, client_info: ClientInfo) -> Optional[IO[bytes]]:
+        if client_info.file is None:
+            try:
+                file = open(f"{self.server_storage}/{client_info.filename}", "rb+")
+                client_info.file = file
+            except FileNotFoundError:
+                self.logger.error(
+                    f"File not found: {client_info.filename} for {client_info.addr}"
                 )
+                self.send_fin(client_info.addr)
+                return None
+        return client_info.file
 
-            # significa que no llego el primer paquete del windows
-            if (
-                package.sequence_number
-                != client_info.protocol.window.items[0].sequence_number
-            ):
-                client_info.protocol.get_chunk(
-                    client_info.protocol.window.items[0].sequence_number
-                )
+    ### por ahora los mandamos, y asumimos que llegan
+    def _send_first_window(self, client_info: ClientInfo) -> None:
+        file = self._get_file_open(client_info)
+        if file is None:
+            return
 
-    def send_first_window(self, client_info: ClientInfo) -> None:
-        pass
+        for i in range(client_info.protocol.window.size):
+            chunk = file.read(BUFSIZE - 50)
+            if not chunk:
+                self.logger.info(f"File transfer finished for {client_info.addr}")
+                self.send_fin(client_info.addr)
+                return
+
+            client_info.protocol.send_chunk(chunk)
+        self.first_window_sent = True
