@@ -17,7 +17,7 @@ class InitPackage(Package):
         return self.file_name.split(".")[0]
 
     def get_file_extension(self) -> str:
-        return self.file_name.split(".")[-1]
+        return self.file_name.split(".")[-1]    
 
     def to_bytes(self) -> bytes:
         filename_without_extension = self.get_file_name_without_extension()
@@ -25,9 +25,9 @@ class InitPackage(Package):
         header = f"{self.type.value}{SEPARATOR}{self.operation}{SEPARATOR}{filename_without_extension}{SEPARATOR}{file_extension}"
         return header.encode("utf-8")
 
-    @staticmethod
-    def from_bytes(data: bytes) -> "InitPackage":
-        received = data.decode("utf-8")
+    @classmethod
+    def from_bytes(cls, raw: bytes) -> "InitPackage":
+        received = raw.decode("utf-8")
         parts = received.split(SEPARATOR)
 
         if len(parts) != 4:
@@ -38,8 +38,8 @@ class InitPackage(Package):
 
         operation: OPERATION = parts[1]
         file_name = f"{parts[2]}.{parts[3]}"
-        return InitPackage(operation, file_name)
 
+        return cls(operation, file_name)
 
 class UploadHeader(InitPackage):
     def __init__(self, file_name: str) -> None:

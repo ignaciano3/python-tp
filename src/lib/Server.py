@@ -4,6 +4,7 @@ from lib.utils.Socket import Socket
 from lib.server.ServerRequestHandler import ServerRequestHandler
 from lib.utils.constants import SERVER_STORAGE
 from lib.utils.enums import Protocol
+from lib.utils.package_error import ChecksumErr, PackageErr
 
 
 class Server:
@@ -35,18 +36,33 @@ class Server:
         self.running = True
         self.bind_socket()
         self.logger.info(f"Server started on {self.host}:{self.port}")
+        self.logger.info(f"Protocol: {self.protocol.name}")
+        self.logger.info(f"Server storage: {self.server_storage}")
 
-        request_handler = ServerRequestHandler(self.server_storage, self.socket, self.logging_level)
+        request_handler = ServerRequestHandler(
+            self.server_storage, self.socket, self.logging_level
+        )
 
         while self.running:
             try:
                 request = self.socket.recv()
                 request_handler.handle_request(request)
+            except KeyboardInterrupt:
+                self.logger.info(
+                    "Interrupción del teclado recibida. Cerrando el servidor."
+                )
+                self.stop()
+                break
+            except (PackageErr, ChecksumErr, TimeoutError) as e:
+                self.logger.error(f"Error in package: {e}")
+                continue
             except OSError as e:
                 if not self.running:
                     break
                 self.logger.error(f"Error receiving data: {e}")
                 break
+            except Exception as e:
+                self.logger.error(f"Unexpected error: {e}")
 
     def stop(self) -> None:
         self.socket.close()

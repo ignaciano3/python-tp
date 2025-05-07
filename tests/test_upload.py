@@ -38,7 +38,7 @@ def start_server(server_addr, server_storage):
     server_thread.start()
     return server, server_thread
 
-def start_client(file_path, server_addr: ADDR, client_num: str | int = "", start_now=True):
+def start_client(file_path: str, server_addr: ADDR, client_num: str | int = "", start_now=True):
     client = Client('upload', file_path, server_addr[0], server_addr[1], protocol=Protocol.STOP_WAIT, logging_level=logging.ERROR)
     client_thread = threading.Thread(target=client.start, name=f"ClientThread-{client_num}")
     if start_now: 
@@ -241,7 +241,7 @@ def test_upload_xl(storages):
 
     uploaded_file = server_storage / "xl.bin"
 
-    client_thread.join(timeout=30)
+    client_thread.join(timeout=5)
     server.stop()
     server_thread.join(timeout=10)
 
@@ -282,7 +282,7 @@ def test_concurrent_upload_xl(storages):
         client_thread.start()
 
     for client_thread in client_threads:
-        client_thread.join()
+        client_thread.join(15)
 
     for client_thread in client_threads:
         assert client_thread.is_alive() is False
