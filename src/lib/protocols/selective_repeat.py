@@ -7,6 +7,8 @@ from lib.utils.constants import BUFSIZE
 from lib.packages.DataPackage import DataPackage
 from lib.packages.AckPackage import AckPackage
 from lib.utils.logger import create_logger
+from lib.packages.Package import Package
+from lib.utils.enums import PackageType
 
 
 @dataclass
@@ -20,6 +22,8 @@ class Window:
     def __init__(self, size: int = 5):
         self.size = size  # Número de secuencia del primer paquete en la ventana
         self.items: list[WindowItem] = []  # ACKs recibidos en la ventana
+
+        self.last_sent_chunks = {}
 
     def length(self) -> int:
         return len(self.items)
@@ -35,6 +39,8 @@ class SelectiveRepeatProtocol:
         )
         self.last_sequence_number = 0
         self.first_sequence_number = 0
+
+    # ---------------------------- SEND ---------------------------- #
 
     def send(self, file: BufferedReader) -> None:
         finished = False
@@ -67,10 +73,14 @@ class SelectiveRepeatProtocol:
         if not isinstance(ack, AckPackage):
             return
 
-        self.logger.debug(f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})")
+        self.logger.debug(
+            f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
+        )
         # Si el número de secuencia no coincide, vuelve a enviar el paquete
         if ack.sequence_number != self.first_sequence_number:
-            self.logger.debug(f"ACK no coincide: {ack.sequence_number} != {self.first_sequence_number}")
+            self.logger.debug(
+                f"ACK no coincide: {ack.sequence_number} != {self.first_sequence_number}"
+            )
             # Setear el ack en el item con ese número de secuencia
 
             for item in self.window.items:
@@ -87,5 +97,44 @@ class SelectiveRepeatProtocol:
             )
             self.first_sequence_number += 1
 
-    def receive(self, file: BufferedWriter):
-        pass
+    # ---------------------------- RECEIVE ---------------------------- #
+
+    def receive(self, file: BufferedWriter) -> None:
+        finished = False
+
+        while not finished:
+            package, _ = self.socket.recv()
+            finished = self._receive_aux(package, file)
+
+    def _receive_aux(self, package: Package, file: BufferedWriter) -> bool:
+        if package.type == PackageType.FIN or package.data is None:
+            file.flush()
+            return True
+
+        if not package.valid:
+            ack_package = AckPackage(self.sequence_number, False)
+            self.socket.sendto(ack_package, self.server_addr)
+            return False
+
+        if package.type != PackageType.DATA:
+            raise Exception("El paquete recibido no es un DataPackage.")
+
+        file.write(package.data)
+
+        ack_package = AckPackage(self.sequence_number)  # type: ignore
+        self.socket.sendto(ack_package, self.server_addr)
+        self.sequence_number += 1
+        return False
+
+    # ---------------------------- SERVER ---------------------------- #
+
+    def get_window(self) -> Window:
+        return self.window
+
+    ################### USR LOS WINDOWS INFO
+    def chunk_sent(self, chunk: bytes, seq_num: int) -> None:
+        self.window.last_sent_chunks[seq_num] = chunk
+        self.logger.debug(f"Chunk sent: {seq_num}")
+
+    def get_chunk(self, seq_num: int) -> bytes:
+        return self.window.last_sent_chunks.get(seq_num, b"")
