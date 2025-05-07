@@ -8,6 +8,9 @@ from lib.packages.DataPackage import DataPackage
 from lib.packages.AckPackage import AckPackage
 from lib.utils.logger import create_logger
 from lib.utils.enums import PackageType
+from threading import Thread, Event
+from typing import Optional
+import heapq
 
 
 @dataclass
@@ -16,6 +19,11 @@ class WindowItem:
     data: bytes
     acked: bool = False
     retries_left: int = 4  # una menos que max_retries
+    timer_thread: Optional[Thread] = None  ### NUEVO TIMER
+    stop_event: Optional[Event] = None  ### NUEVO TIMER
+
+    def __lt__(self, other):  # para que funcione con heapq
+        return self.sequence_number < other.sequence_number
 
 
 class Window:
@@ -26,9 +34,12 @@ class Window:
     def length(self) -> int:
         return len(self.items)
 
+    def add_item(self, item: WindowItem):
+        heapq.heappush(self.items, item)
+
     def remove_first_sent(self):
         if self.items:
-            self.items.pop(0)
+            return heapq.heappop(self.items)  # saca el de menor sequence_number
         else:
             raise Exception("No hay paquetes en la ventana para eliminar.")
 
@@ -93,10 +104,13 @@ class SelectiveRepeatProtocol:
             return seq_number + 1
 
     def agregar_paquete_al_window(self, package: DataPackage) -> None:
-        self.window.items.append(WindowItem(package.sequence_number, package.data))
+        item = WindowItem(package.sequence_number, package.data)
+        self.window.add_item(item)
         self.last_sequence_number = self.obtener_proximo_seq_number(
             self.last_sequence_number
         )
+
+        self._start_timer_for_item(item)  ### NUEVO TIMER
 
     def _receive_ack(self) -> None:
         if self.tries >= self.max_tries:
@@ -132,6 +146,8 @@ class SelectiveRepeatProtocol:
         for item in self.window.items:
             if item.sequence_number == ack.sequence_number:
                 item.acked = True
+                if item.stop_event:  ### NUEVO TIMER
+                    item.stop_event.set()  ### NUEVO TIMER
                 break
 
         if ack.sequence_number != self.first_sequence_number:
@@ -165,7 +181,7 @@ class SelectiveRepeatProtocol:
                 f"Remuevo el paquete rezagado con seq_number {first_package.sequence_number} con ack true en la ventana"
             )
             self.first_sequence_number += 1
-            self._actualizar_window()  ###################33 esta bien esto?
+            self._actualizar_window()
 
     # ---------------------------- RECEIVE ---------------------------- #
 
@@ -211,7 +227,7 @@ class SelectiveRepeatProtocol:
         data_package = DataPackage(chunk, self.last_sequence_number)
 
         #### NUEVO TIMER (FALTABA AGREGAR A VENTANA)
-        self.window.items.append(WindowItem(data_package.sequence_number, chunk))
+        # self.window.items.append(WindowItem(data_package.sequence_number, chunk))
 
         self._send_package(data_package)
         self.agregar_paquete_al_window(data_package)
@@ -220,6 +236,8 @@ class SelectiveRepeatProtocol:
         for item in self.window.items:
             if item.sequence_number == seq_number:
                 item.acked = True
+                if item.stop_event:  ### NUEVO TIMER
+                    item.stop_event.set()  ### NUEVO TIMER
                 break
         else:
             self.logger.warning(
@@ -261,3 +279,25 @@ class SelectiveRepeatProtocol:
             )
             return False
         return True
+
+    ### NUEVO TIMER
+    def _start_timer_for_item(self, item: WindowItem) -> None:
+        stop_event = Event()
+        item.stop_event = stop_event  # Asignás igualmente si otro código lo necesita
+
+        def timeout_func(local_stop_event=stop_event):  # Capturás el Event localmente
+            while not local_stop_event.wait(timeout=3):
+                if item.acked:
+                    return
+                self.logger.debug(
+                    f"Timeout para paquete {item.sequence_number}, reenviando."
+                )
+                item.retries_left -= 1
+                data_package = DataPackage(item.data, item.sequence_number)
+                self._send_package(data_package)
+
+        thread = Thread(target=timeout_func)
+        thread.daemon = True
+        thread.start()
+
+        item.timer_thread = thread

@@ -124,9 +124,9 @@ class ServerRequestHandler:
         self.send_ack(client_info.addr, int(package.sequence_number))
 
     def handle_download_request(self, package: AckPackage, client_info: ClientInfo):
-        if self.protocol == Protocol.STOP_WAIT:
+        if self.protocol.value == Protocol.STOP_WAIT.value:
             self.handle_download_request_stopnwait(package, client_info)
-        elif self.protocol == Protocol.SELECTIVE_REPEAT:
+        elif self.protocol.value == Protocol.SELECTIVE_REPEAT.value:
             if not self.first_window_sent:
                 self.first_window_sent = True
                 self._send_first_window(client_info)
@@ -216,6 +216,10 @@ class ServerRequestHandler:
         if not client_info.protocol.ack_received(package.sequence_number):
             return
 
+        self.logger.debug(
+            f"Recibiendo ACK: {package.sequence_number}  - ({client_info.protocol.first_sequence_number} {client_info.protocol.last_sequence_number})"
+        )
+
         # si ACK no es valido (NAK), hay que reenviar
         if not package.valid:
             self.logger.warning(f"Llego un NAK: {package}")
@@ -241,7 +245,6 @@ class ServerRequestHandler:
 
         client_info.protocol.send_chunk(chunk)
 
-        #### FALTA HACER CHEQUEO DE RETRIES ####
         #### FALTA BUFFEREAR EN CASO DE TIMEOUT ####
         #### FALTA CHEQUEAR QUE LA VNTANA NO ESTA LLENA ####
 
