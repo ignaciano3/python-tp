@@ -182,7 +182,7 @@ class ServerRequestHandler:
     def send_ack(self, addr: ADDR, seq_num: int = 0):
         ack_package = AckPackage(seq_num)
         self.socket.sendto(ack_package, addr)
-        self.logger.info(f"ACK sent to {addr}")
+        self.logger.info(f"ACK sent to {addr} with seq_num {seq_num}")
 
     def send_nack(self, addr: ADDR, seq_num: int = 0):
         nack_package = AckPackage(seq_num)

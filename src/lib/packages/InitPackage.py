@@ -17,7 +17,7 @@ class InitPackage(Package):
         return self.file_name.split(".")[0]
 
     def get_file_extension(self) -> str:
-        return self.file_name.split(".")[-1]
+        return self.file_name.split(".")[-1]    
 
     def to_bytes(self) -> bytes:
         filename_without_extension = self.get_file_name_without_extension()

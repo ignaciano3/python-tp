@@ -4,8 +4,7 @@ from lib.utils.types import ADDR
 from lib.utils.Socket import Socket
 from lib.packages.Package import Package
 from lib.utils.enums import PackageType
-from lib.packages.DataPackage import DataPackage
-from lib.utils.constants import BUFSIZE
+from lib.protocols.selective_repeat import SelectiveRepeatProtocol
 
 
 class StopAndWaitProtocol:
@@ -16,47 +15,7 @@ class StopAndWaitProtocol:
         self.tries = 0
 
     def send(self, file: BufferedReader) -> None:
-        while True:
-            data = file.read(BUFSIZE - 8)
-            if not data:
-                break  # Fin del archivo
-
-            data_package = DataPackage(data, self.sequence_number)
-            self._send_aux(data_package)
-
-    def _send_aux(self, package: Package) -> None:
-        if self.tries >= 5:
-            print("Número máximo de reintentos alcanzado. Abortando.")
-            raise Exception("Número máximo de reintentos alcanzado. Abortando.")
-
-        # Envía el paquete al servidor
-        self.socket.sendto(package, self.server_addr)
-
-        # Espera la confirmación (ACK)
-        ack = None
-        try:
-            self.socket.settimeout(5000)  # Timeout de 1 segundo
-            ack, _ = self.socket.recv()
-            if not ack.valid:
-                raise TimeoutError
-        except TimeoutError:
-            print("Timeout alcanzado. Reintentando...")
-            self.tries += 1
-            self._send_aux(package)
-        except Exception as e:
-            print(f"Error al recibir el ACK: {e}")
-            self.tries += 1
-            self._send_aux(package)
-
-        if not isinstance(ack, AckPackage):
-            return
-
-        if ack.sequence_number != self.sequence_number:
-            self.tries += 1
-            self._send_aux(package)  
-        else:
-            self.tries = 0
-            self.sequence_number ^= 1
+        SelectiveRepeatProtocol(self.socket, self.server_addr, 1, True).send(file)
 
     def receive(self, file: BufferedWriter) -> None:
         finished = False
@@ -65,13 +24,13 @@ class StopAndWaitProtocol:
             package, _ = self.socket.recv()
             finished = self._receive_aux(package, file)
 
-    def _receive_aux(self, package: Package, file: BufferedWriter) -> bool:           
+    def _receive_aux(self, package: Package, file: BufferedWriter) -> bool:
         if package.type == PackageType.FIN or package.data is None:
             file.flush()
             return True
-        
+
         if not package.valid:
-            ack_package = AckPackage(self.sequence_number,False)
+            ack_package = AckPackage(self.sequence_number, False)
             self.socket.sendto(ack_package, self.server_addr)
             return False
 

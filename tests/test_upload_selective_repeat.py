@@ -160,7 +160,7 @@ def test_concurrent_upload(storages):
         file.write_text(text, encoding="utf-8")
         files.append(file)
 
-    server_addr = (LOCALHOST, DEFAULT_PORT + 20)
+    server_addr = (LOCALHOST, DEFAULT_PORT + 22)
     # Start the server
     server, server_thread = start_server(server_addr, server_storage)
 
