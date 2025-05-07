@@ -13,20 +13,16 @@ optional arguments :
 """
 
 from argparse import ArgumentParser
+from lib.utils.enums import Protocol
 
 from lib.utils.constants import DEFAULT_PORT, LOCALHOST, SERVER_STORAGE
-from lib.utils.enums import Protocol
 
 parser = ArgumentParser(
     description="Start a server to receive files using a specified protocol."
 )
 group = parser.add_mutually_exclusive_group(required=False)
-group.add_argument(
-    "-v", "--verbose", action="store_true", help="increase output verbosity"
-)
-group.add_argument(
-    "-q", "--quiet", action="store_true", help="decrease output verbosity"
-)
+group.add_argument("-v", "--verbose", default=False, help="increase output verbosity")
+group.add_argument("-q", "--quiet", default=False, help="decrease output verbosity")
 parser.add_argument(
     "-H", "--host", type=str, default=LOCALHOST, help="service IP address"
 )
@@ -48,6 +44,6 @@ parser.add_argument(
     "-r",
     "--protocol",
     default=Protocol.STOP_WAIT,
-    type=str,
+    type=int,
     help="error recovery protocol",
 )

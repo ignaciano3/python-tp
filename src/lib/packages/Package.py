@@ -5,7 +5,9 @@ from lib.utils.constants import BUFSIZE, SEPARATOR
 class Package:
     data = None
 
-    def __init__(self, type: PackageType, data: bytes | None = None, valid: bool = True) -> None:
+    def __init__(
+        self, type: PackageType, data: bytes | None = None, valid: bool = True
+    ) -> None:
         self.type = type
         self.valid = valid
         if data is not None and len(data) > BUFSIZE:

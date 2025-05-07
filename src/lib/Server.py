@@ -11,8 +11,8 @@ class Server:
     def __init__(
         self,
         host: str,
+        protocol: Protocol,
         port: int = 8080,
-        protocol: Protocol = Protocol.STOP_WAIT,
         server_storage=SERVER_STORAGE,
         logging_level=logging.DEBUG,
     ) -> None:
@@ -24,6 +24,8 @@ class Server:
         self.logger = create_logger("server", "[SERVER]", logging_level)
         self.server_storage = server_storage
         self.protocol = protocol
+
+        print("EL PROTOCOLO ES: ", self.protocol)
 
     def bind_socket(self) -> None:
         try:
@@ -40,7 +42,7 @@ class Server:
         self.logger.info(f"Server storage: {self.server_storage}")
 
         request_handler = ServerRequestHandler(
-            self.server_storage, self.socket, self.logging_level
+            self.server_storage, self.socket, self.protocol, self.logging_level
         )
 
         while self.running:
