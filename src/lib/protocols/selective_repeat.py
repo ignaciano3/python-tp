@@ -35,6 +35,8 @@ class SelectiveRepeatProtocol:
         )
         self.last_sequence_number = 0
         self.first_sequence_number = 0
+        self.tries = 0
+        self.max_tries = 5
 
     def send(self, file: BufferedReader) -> None:
         finished = False
@@ -47,6 +49,7 @@ class SelectiveRepeatProtocol:
 
                 data_package = DataPackage(data, self.last_sequence_number)
                 self._send_package(data_package)
+                self.agregar_paquete_al_window(data_package)
 
             if self.window.length() == 0:
                 finished = True
@@ -58,13 +61,34 @@ class SelectiveRepeatProtocol:
         self.logger.debug(
             f"Enviando paquete: {package.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
         )
+        
+    def agregar_paquete_al_window(self, package: DataPackage) -> None:
         self.window.items.append(WindowItem(package.sequence_number, package.data))
         self.last_sequence_number += 1
 
     def _receive_ack(self) -> None:
+        if self.tries >= self.max_tries:
+            self.logger.error("Número máximo de reintentos alcanzado. Abortando.")
+            raise Exception("Número máximo de reintentos alcanzado. Abortando.")
+
         # Espera la confirmación (ACK)
         self.socket.settimeout(1)  # Timeout de 1 segundo
-        ack, _ = self.socket.recv()
+        try:
+            ack, _ = self.socket.recv()
+        except TimeoutError:
+            self.logger.debug("Timeout esperando ACK")
+
+            # Es probable que el paquete se haya perdido, por lo tanto lo reenviamos
+            data_package = DataPackage(
+                self.window.items[0].data, self.first_sequence_number
+            )
+            self._send_package(data_package)
+            self.tries += 1
+            return
+        except Exception as e:
+            self.logger.error(f"Error inesperado al recibir el ACK: {e}")
+            self.tries += 1
+            raise
 
         if not isinstance(ack, AckPackage):
             return
@@ -84,8 +108,13 @@ class SelectiveRepeatProtocol:
             )
         else:
             first_package = self.window.items[0]
-            if first_package.sequence_number != ack.sequence_number:
-                raise ValueError("El primer paquete no coincide con el ACK recibido")
+            if first_package.sequence_number <= ack.sequence_number:
+                self.logger.warning(
+                    f"El servidor mando un paquete con seq_number {first_package.sequence_number} que no esta en la ventana"
+                )
+                # raise ValueError("El primer paquete no coincide con el ACK recibido")
+                return
+            
             self.window.items.remove(first_package)
             self.first_sequence_number += 1
 

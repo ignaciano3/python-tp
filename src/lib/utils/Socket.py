@@ -34,6 +34,9 @@ class Socket:
         except (PackageErr, ChecksumErr, TimeoutError) as e:
             self.logger.error(f"Error en el paquete recibido: {e}")
             raise e
+        except ConnectionResetError:
+            self.logger.error("La otra parte cerró la conexión")
+            raise
         except Exception as e:
             self.logger.exception("Excepción inesperada en recv:")
             raise e
