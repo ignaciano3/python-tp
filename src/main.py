@@ -26,7 +26,7 @@ def main():
             file_path,
             LOCALHOST,
             12345,
-            protocol=Protocol.STOP_WAIT,
+            protocol=Protocol.SELECTIVE_REPEAT,
             logging_level=logging.INFO,
         )
         client_thread = threading.Thread(target=client.start, name=f"ClientThread-{i}")

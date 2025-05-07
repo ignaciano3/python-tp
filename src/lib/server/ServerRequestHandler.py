@@ -132,27 +132,3 @@ class ServerRequestHandler:
         fin_package = FinPackage()
         self.socket.sendto(fin_package, addr)
         self.logger.info(f"FIN sent to {addr}")
-
-
-"""
-
-        try:
-            while True:
-                chunk = os.read(file_descriptor, BUFSIZE - 50)
-                if not chunk:
-                    break  # End of file
-
-                data_package = DataPackage(chunk, sequence_number)
-                self.socket.sendto(data_package, client_info.addr)
-                self.logger.debug(f"Sent chunk to {client_info.addr}")
-
-                # Wait for ACK
-                self.socket.recv()
-                sequence_number ^= 1  # TODO: Implement a better sequence number handling
-
-            fin_package = FinPackage()
-            self.socket.sendto(fin_package, client_info.addr)
-            self.logger.info(f"File sent successfully to {client_info.addr}")
-
-        except Exception as e:
-            self.logger.error(f"Error while handling download request: {e}")"""
