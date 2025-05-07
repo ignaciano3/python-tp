@@ -5,7 +5,8 @@ from lib.packages.AckPackage import AckPackage
 from lib.packages.DataPackage import DataPackage
 from lib.packages.FinPackage import FinPackage
 from lib.packages.InitPackage import InitPackage
-from lib.utils.package_error import PackageErr
+from lib.packages.NackPackage import NackPackage
+
 
 class FactoryPackage:
     @staticmethod
@@ -13,18 +14,14 @@ class FactoryPackage:
         package_type = int(raw_data.split(SEPARATOR.encode())[0])
 
         if package_type == PackageType.INIT.value:
-            package = InitPackage.from_bytes(raw_data)
+            return InitPackage.from_bytes(raw_data)
         elif package_type == PackageType.ACK.value:
-            package = AckPackage.from_bytes(raw_data)
+            return AckPackage.from_bytes(raw_data)
         elif package_type == PackageType.DATA.value:
-            package = DataPackage.from_bytes(raw_data)
+            return DataPackage.from_bytes(raw_data)
         elif package_type == PackageType.FIN.value:
-            package = FinPackage.from_bytes(raw_data)
+            return FinPackage.from_bytes(raw_data)
         elif package_type == PackageType.NACK.value:
-            package = Package.from_bytes(raw_data)
+            return NackPackage.from_bytes(raw_data)
         else:
             raise ValueError(f"Unknown package type: {package_type}")
-        
-        if not package.valid:
-            raise PackageErr("Invalid package received")
-        return package
