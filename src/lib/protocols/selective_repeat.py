@@ -160,30 +160,24 @@ class SelectiveRepeatProtocol:
             f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
         )
 
+        if (
+            ack.sequence_number < self.first_sequence_number
+            or ack.sequence_number > self.last_sequence_number
+        ):
+            self.logger.error(
+                f"ACK no esta dentro de la ventana: {ack.sequence_number} ({self.first_sequence_number} - {self.last_sequence_number})"
+            )
+            return
+
         item = self.get_item(ack.sequence_number)
+        item.acked = True
         if item.stop_event:  ### NUEVO TIMER
             item.stop_event.set()
 
-        if ack.sequence_number != self.first_sequence_number:
-            self.logger.debug(
-                f"ACK no coincide: {ack.sequence_number} != {self.first_sequence_number}"
-            )
-        else:
-            first_package = self.window.items[0]
-            if first_package.sequence_number < ack.sequence_number:
-                self.logger.warning(
-                    f"El servidor mando un paquete con seq_number {first_package.sequence_number} que no esta en la ventana"
-                )
-                # raise ValueError("El primer paquete no coincide con el ACK recibido")
-                return
-
-            self.window.items.remove(first_package)
-            self.first_sequence_number = self.obtener_proximo_seq_number(
-                self.first_sequence_number
-            )
-
-            if not self.from_stop_and_wait and self.window.length() > 0:
-                self._actualizar_window()
+        self.logger.debug(
+            f"ACK recibido para el primer paquete de la ventana: {item.sequence_number}"
+        )
+        self._actualizar_window()
 
     def _actualizar_window(self) -> None:
         if self.window.length() == 0:
@@ -196,9 +190,11 @@ class SelectiveRepeatProtocol:
             # caso en que llego en desorden algun paquete
             self.window.items.remove(first_package)
             self.logger.warning(
-                f"Remuevo el paquete rezagado con seq_number {first_package.sequence_number} con ack true en la ventana"
+                f"Remuevo el paquete con seq_number {first_package.sequence_number}  ({self.first_sequence_number} - {self.last_sequence_number})"
             )
-            self.first_sequence_number += 1
+            self.first_sequence_number = self.obtener_proximo_seq_number(
+                self.first_sequence_number
+            )
             self._actualizar_window()
 
     # ---------------------------- RECEIVE ---------------------------- #

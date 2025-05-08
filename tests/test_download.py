@@ -166,10 +166,10 @@ def test_concurrent_download(storages):
 
     for client_thread in client_threads:
         client_thread.start()
-        client_thread.join(timeout=20)
+        client_thread.join(timeout=3)
 
     server.stop()
-    server_thread.join(timeout=20)
+    server_thread.join(timeout=3)
 
     assert (
         len(list(client_storage.iterdir())) == FILE_AMOUNT
