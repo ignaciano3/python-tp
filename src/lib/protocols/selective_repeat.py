@@ -207,9 +207,9 @@ class SelectiveRepeatProtocol:
             self._send_ack(seq_number)
 
     def _receive_data(self, file: BufferedWriter, retries=0) -> tuple[bool, int]:
-        if retries >= self.max_tries:
-            self.logger.error("Número máximo de reintentos alcanzado. Abortando.")
-            raise Exception("Número máximo de reintentos alcanzado. Abortando.")
+        # if retries >= self.max_tries:
+        #     self.logger.error("Número máximo de reintentos alcanzado. Abortando.")
+        #     raise Exception("Número máximo de reintentos alcanzado. Abortando.")
 
         package = None
         try:
@@ -218,21 +218,26 @@ class SelectiveRepeatProtocol:
             self.logger.error("Timeout esperando paquete")
             self.tries += 1
             self._send_nack(self.first_sequence_number)
-            self._receive_data(file, retries + 1)
+            return self._receive_data(file, retries + 1)
         except Exception as e:
             self.logger.error(f"Error inesperado al recibir el paquete: {e}")
             self.tries += 1
             raise
 
         if package is None:
+            self.logger.error("Paquete recibido es None")
             return (False, 0)
 
         if package.type == PackageType.FIN or package.data is None:
+            self.logger.debug("Paquete FIN recibido")
             file.flush()
             return (True, package.sequence_number)
 
         if not package.valid:
             ack_package = NackPackage(package.sequence_number)
+            self.logger.error(
+                f"Checksum inválido, mando Nack con seq_num: {package.sequence_number}"
+            )
             self.socket.sendto(ack_package, self.server_addr)
 
             return self._receive_data(file, retries + 1)
@@ -240,6 +245,9 @@ class SelectiveRepeatProtocol:
         if package.type != PackageType.DATA:
             raise Exception("El paquete recibido no es un DataPackage.")
 
+        self.logger.debug(
+            "Escribí paquete de datos con seq_num: " + str(package.sequence_number)
+        )
         file.write(package.data)
         return (False, package.sequence_number)
 

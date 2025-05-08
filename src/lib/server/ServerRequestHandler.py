@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import heapq
 from io import BufferedRandom
 import logging
@@ -14,7 +14,7 @@ from lib.packages.AckPackage import AckPackage
 from lib.packages.DataPackage import DataPackage
 from lib.packages.FinPackage import FinPackage
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
-from typing import Optional, IO
+from typing import Optional, IO, Union
 from lib.utils.enums import Protocol
 from lib.packages.NackPackage import NackPackage
 
@@ -28,7 +28,10 @@ class ClientInfo:
     protocol: SelectiveRepeatProtocol
     file: BufferedRandom | None = None
     seq_number: int = 0
-    heap = []
+    heap: list[DataPackage] = field(default_factory=list)  # = []
+    retries: dict[int, int] = field(
+        default_factory=dict
+    )  # dict[int, int] = {}  # {seq_num: retries_done}
 
 
 class ServerRequestHandler:
@@ -40,7 +43,7 @@ class ServerRequestHandler:
         self, server_storage: str, socket: Socket, protocol, logging_level=logging.DEBUG
     ) -> None:
         self.clients: dict[str, ClientInfo] = {}
-        self.retrys = 0
+        # self.retrys = 0
         self.server_storage = server_storage
         self.socket = socket
         self.logger = create_logger(
@@ -53,7 +56,7 @@ class ServerRequestHandler:
         # self.logger.info(f"Handling request: {request}")
         package, addr = request
 
-        if not package.valid:
+        if not package.valid:  ## que sea solo para checksum
             self.logger.error(f"Invalid package received: {package}")
             return self.send_nack(addr, package.sequence_number)
 
@@ -106,10 +109,15 @@ class ServerRequestHandler:
         elif isinstance(package, DataPackage):
             self.handle_upload_request(package, client_info)
         elif isinstance(package, NackPackage):
-            item = client_info.protocol.get_item(package.sequence_number)
-            self.socket.sendto(
-                DataPackage(item.data, item.sequence_number), client_info.addr
-            )
+            if client_info.operation == "download":
+                try:
+                    self.handle_download_request(package, client_info)
+                except TimeoutError:
+                    self.handle_finish_request(client_info)
+            else:
+                self.logger.info(
+                    "[REQUEST HANDLER] Unexpected ACK during upload (ignored)"
+                )
         elif isinstance(package, AckPackage):
             if client_info.operation == "download":
                 try:
@@ -168,7 +176,9 @@ class ServerRequestHandler:
         else:
             return client_info.seq_number ^ 1
 
-    def handle_download_request(self, package: AckPackage, client_info: ClientInfo):
+    def handle_download_request(
+        self, package: Union[AckPackage, NackPackage], client_info: ClientInfo
+    ):
         if self.protocol.value == Protocol.STOP_WAIT.value:
             self.handle_download_request_stopnwait(package, client_info)
         elif self.protocol.value == Protocol.SELECTIVE_REPEAT.value:
@@ -182,13 +192,23 @@ class ServerRequestHandler:
             self.logger.error(f"Unknown protocol: {self.protocol}")
 
     def handle_download_request_stopnwait(
-        self, package: AckPackage, client_info: ClientInfo
-    ):  ## manejo
-        if self.retrys == 5:
+        self, package: Union[AckPackage, NackPackage], client_info: ClientInfo
+    ):
+        # Llego a max retries, cerramos todo
+        if client_info.retries.get(package.sequence_number, 0) >= 5:
+            print("aca4")
+            self.logger.error(
+                f"Max retries reached for {client_info.addr}, closing connection"
+            )
             self.send_fin(client_info.addr)
+            client_info.retries.pop(package.sequence_number)
             return
 
-        if package.valid:
+        next_seq_number = package.sequence_number
+
+        # Es un ACK, entonces saco el retries, ya no se necesita
+        if isinstance(package, AckPackage):
+            client_info.retries.pop(package.sequence_number, None)
             if client_info.file is None:
                 try:
                     file = open(f"{self.server_storage}/{client_info.filename}", "rb+")
@@ -199,23 +219,30 @@ class ServerRequestHandler:
                     )
                     self.send_fin(client_info.addr)
                     return
+
             else:
                 file = client_info.file
 
             chunk = file.read(BUFSIZE - 50)
-            self.last_chunk = chunk
-            self.retrys = 0
             if not chunk:
                 self.logger.info(f"File transfer finished for {client_info.addr}")
                 self.send_fin(client_info.addr)
                 return
+            self.last_chunk = chunk
+            next_seq_number = self.obtener_proximo_seq_number(client_info)
+            client_info.protocol.sequence_number = next_seq_number
+            client_info.seq_number = next_seq_number
 
-        else:
-            print(f"reintentando paquete,try {self.retrys}")
+        # Si es un NACK, entonces reintentamos el paquete
+        elif isinstance(package, NackPackage):
+            self.logger.debug(
+                f"reintentando paquete,try {client_info.retries.get(package.sequence_number, 0)}"
+            )
             chunk = self.last_chunk
-            self.retrys += 1
-
-        data_package = DataPackage(chunk, client_info.seq_number)
+            client_info.retries[package.sequence_number] = (
+                client_info.retries.get(package.sequence_number, 0) + 1
+            )
+        data_package = DataPackage(chunk, next_seq_number)
         self.socket.sendto(data_package, client_info.addr)
 
     def send_init_response(self, client_info: ClientInfo):
@@ -248,10 +275,16 @@ class ServerRequestHandler:
 
     # ---------------------------- SELECTIVE REPEAT  ---------------------------- #
     def handle_download_request_selectiverepeat(
-        self, package: AckPackage, client_info: ClientInfo
+        self, package: Union[AckPackage, NackPackage], client_info: ClientInfo
     ) -> None:
         file = self._get_file_open(client_info)
         if file is None:
+            return
+
+        if isinstance(package, NackPackage):
+            self.logger.warning(f"Llego un NAK: {package}, por ahora lo ignoro")
+            # if not client_info.protocol.resend_package(package.sequence_number):
+            #     self.send_fin(client_info.addr)
             return
 
         # se chequea si ack esta dentro de la ventana, si no se ignora
