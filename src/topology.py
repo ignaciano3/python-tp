@@ -1,61 +1,27 @@
-from mininet.node import CPULimitedHost
 from mininet.topo import Topo
-from mininet.net import Mininet
-from mininet.log import setLogLevel
-from mininet.node import RemoteController
-from mininet.cli import CLI
-"""
-Instructions to run the topo:
-    1. Go to directory where this fil is.
-    2. run: sudo -E python Simple_Pkt_Topo.py.py
-
-The topo has 4 switches and 4 hosts. They are connected in a star shape.
-"""
+from mininet.link import TCLink
 
 
-class SimplePktSwitch(Topo):
-    """Simple topology example."""
-
-    def __init__(self, **opts):
-        """Create custom topo."""
-
+class CustomTopo (Topo):
+    def __init__(self, num_clients, loss_percent):
         # Initialize topology
-        # It uses the constructor for the Topo cloass
-        super(SimplePktSwitch, self).__init__(**opts)
+        Topo.__init__(self)
+        # Create server host
+        server = self.addHost('h0')
 
-        # Add hosts and switches
-        h1 = self.addHost('h1')
-        h2 = self.addHost('h2')
-        h3 = self.addHost('h3')
-        h4 = self.addHost('h4')
+        # Create switch
+        switch = self.addSwitch('s1')
+        self.addLink(server, switch, cls=TCLink, loss=loss_percent)
 
-        # Adding switches
-        s1 = self.addSwitch('s1', dpid="0000000000000001")
-        s2 = self.addSwitch('s2', dpid="0000000000000002")
-        s3 = self.addSwitch('s3', dpid="0000000000000003")
-        s4 = self.addSwitch('s4', dpid="0000000000000004")
+        # Create other hosts
+        for i in range(1, num_clients+1):
+            host_name = 'h{}'.format(i)
+            host = self.addHost(host_name)
 
-        # Add links
-        self.addLink(h1, s1)
-        self.addLink(h2, s2)
-        self.addLink(h3, s3)
-        self.addLink(h4, s4)
-
-        self.addLink(s1, s2)
-        self.addLink(s1, s3)
-        self.addLink(s1, s4)
+            # Create links from server to other hosts
+            self.addLink(switch, host, cls=TCLink, loss=0)
 
 
-def run():
-    c = RemoteController('c', '0.0.0.0', 6633)
-    net = Mininet(topo=SimplePktSwitch(), host=CPULimitedHost, controller=None)
-    net.addController(c)
-    net.start()
+topos = {'customTopo': CustomTopo}
 
-    CLI(net)
-    net.stop()
-
-# if the script is run directly (sudo custom/optical.py):
-if __name__ == '__main__':
-    setLogLevel('info')
-    run()
+# sudo mn --custom ./src/topology.py --topo customTopo,num_clients=4,loss_percent=10 --mac -x
