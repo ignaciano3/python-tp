@@ -24,10 +24,12 @@ if __name__ == "__main__":
 
     host, port, storage, protocol = args.host, args.port, args.storage, args.protocol
 
-    if protocol == 1:
-        protocol_handler = Protocol.SELECTIVE_REPEAT
-    else:
-        protocol_handler = Protocol.STOP_WAIT
+    protocol_handler = Protocol(protocol)
+    print(f"Protocol handler: {protocol_handler}, {protocol_handler.name}")
+
+    #     protocol_handler = Protocol.SELECTIVE_REPEAT
+    # else:
+    #     protocol_handler = Protocol.STOP_WAIT
 
     if args.verbose:
         logging_level = logging.DEBUG

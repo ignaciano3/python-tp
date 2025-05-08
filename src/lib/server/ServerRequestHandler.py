@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import heapq
 from io import BufferedRandom
 import logging
 from lib.utils.types import REQUEST
@@ -15,6 +16,7 @@ from lib.packages.FinPackage import FinPackage
 from lib.protocols.selective_repeat import SelectiveRepeatProtocol
 from typing import Optional, IO
 from lib.utils.enums import Protocol
+from lib.packages.NackPackage import NackPackage
 
 
 @dataclass
@@ -26,6 +28,7 @@ class ClientInfo:
     protocol: SelectiveRepeatProtocol
     file: BufferedRandom | None = None
     seq_number: int = 0
+    heap = []
 
 
 class ServerRequestHandler:
@@ -50,6 +53,10 @@ class ServerRequestHandler:
         # self.logger.info(f"Handling request: {request}")
         package, addr = request
 
+        if not package.valid:
+            self.logger.error(f"Invalid package received: {package}")
+            return self.send_nack(addr, package.sequence_number)
+
         addr_str = f"{addr[0]}:{addr[1]}"
         if addr_str not in self.clients:
             if not isinstance(package, InitPackage):
@@ -58,10 +65,16 @@ class ServerRequestHandler:
                 )
                 return
 
+            self.logger.warning(self.protocol)
+            if self.protocol == Protocol.STOP_WAIT:
+                _window_size = 1
+            else:
+                _window_size = 5
+
             protocol_handle = SelectiveRepeatProtocol(
                 socket=self.socket,
                 server_addr=addr,
-                window_size=5,
+                window_size=_window_size,
                 logging_level=self.logger.level,
             )
 
@@ -72,6 +85,8 @@ class ServerRequestHandler:
                 )
                 self.send_fin(addr)
                 return
+
+            self.logger.warning(_window_size)
 
             self.clients[addr_str] = ClientInfo(
                 addr=addr,
@@ -90,6 +105,11 @@ class ServerRequestHandler:
             self.send_init_response(client_info)
         elif isinstance(package, DataPackage):
             self.handle_upload_request(package, client_info)
+        elif isinstance(package, NackPackage):
+            item = client_info.protocol.get_item(package.sequence_number)
+            self.socket.sendto(
+                DataPackage(item.data, item.sequence_number), client_info.addr
+            )
         elif isinstance(package, AckPackage):
             if client_info.operation == "download":
                 try:
@@ -118,11 +138,35 @@ class ServerRequestHandler:
         else:
             file = client_info.file
 
-        file.write(package.data)
+        self.logger.error(f"pack seq : {package.sequence_number}")
+        self.logger.error(f"client seq_num : {client_info.seq_number}")
+
+        if package.sequence_number == client_info.seq_number:
+            file.write(package.data)
+            client_info.seq_number = self.obtener_proximo_seq_number(client_info)
+            self.logger.error(f"client seq_num Actualizado: {client_info.seq_number}")
+            heapq.heapify(client_info.heap)
+            while client_info.heap:
+                if client_info.heap[0].sequence_number == client_info.seq_number:
+                    item = heapq.heappop(client_info.heap)
+                    file.write(item.data)
+                    client_info.seq_number = self.obtener_proximo_seq_number(
+                        client_info
+                    )
+                else:
+                    break
+        else:
+            client_info.heap.append(package)
 
         self.logger.debug(f"File written successfully from {client_info.addr}")
 
         self.send_ack(client_info.addr, int(package.sequence_number))
+
+    def obtener_proximo_seq_number(self, client_info: ClientInfo) -> int:
+        if self.protocol == Protocol.SELECTIVE_REPEAT:
+            return client_info.seq_number + 1
+        else:
+            return client_info.seq_number ^ 1
 
     def handle_download_request(self, package: AckPackage, client_info: ClientInfo):
         if self.protocol.value == Protocol.STOP_WAIT.value:
@@ -193,8 +237,7 @@ class ServerRequestHandler:
         # self.logger.info(f"ACK sent to {addr} with seq_num {seq_num}")
 
     def send_nack(self, addr: ADDR, seq_num: int = 0):
-        nack_package = AckPackage(seq_num)
-        nack_package.valid = False
+        nack_package = NackPackage(seq_num)
         self.socket.sendto(nack_package, addr)
         self.logger.info(f"NACK sent to {addr}")
 

@@ -5,8 +5,7 @@ from lib.packages.Package import Package
 
 class AckPackage(Package):
     def __init__(self, sequence_number: int = 0, valid: bool = True) -> None:
-        super().__init__(PackageType.ACK, valid=valid)
-        self.sequence_number = sequence_number
+        super().__init__(PackageType.ACK, valid=valid, sequence_number=sequence_number)
 
     def to_bytes(self) -> bytes:
         return f"{self.type.value}{SEPARATOR}{self.sequence_number}{SEPARATOR}{self.valid}".encode(

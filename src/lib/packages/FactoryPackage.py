@@ -5,6 +5,7 @@ from lib.packages.AckPackage import AckPackage
 from lib.packages.DataPackage import DataPackage
 from lib.packages.FinPackage import FinPackage
 from lib.packages.InitPackage import InitPackage
+from lib.packages.NackPackage import NackPackage
 
 
 class FactoryPackage:
@@ -21,6 +22,6 @@ class FactoryPackage:
         elif package_type == PackageType.FIN.value:
             return FinPackage.from_bytes(raw_data)
         elif package_type == PackageType.NACK.value:
-            return Package.from_bytes(raw_data)
+            return NackPackage.from_bytes(raw_data)
         else:
             raise ValueError(f"Unknown package type: {package_type}")

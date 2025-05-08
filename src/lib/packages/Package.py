@@ -6,8 +6,13 @@ class Package:
     data = None
 
     def __init__(
-        self, type: PackageType, data: bytes | None = None, valid: bool = True
+        self,
+        type: PackageType,
+        data: bytes | None = None,
+        valid: bool = True,
+        sequence_number: int = 0,
     ) -> None:
+        self.sequence_number = sequence_number
         self.type = type
         self.valid = valid
         if data is not None and len(data) > BUFSIZE:
@@ -20,6 +25,7 @@ class Package:
     def get_checksum(self) -> int:
         if self.data is None:
             return 0
+
         return sum(self.data) % 256
 
     def to_bytes(self) -> bytes:
@@ -35,4 +41,4 @@ class Package:
         return PackageType(int(package_type_raw))
 
     def __repr__(self) -> str:
-        return f"Package(type={self.type})"
+        return f"Package(type={self.type}, sequence_number={self.sequence_number}, valid={self.valid})"

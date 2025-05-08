@@ -8,9 +8,10 @@ from lib.packages.DataPackage import DataPackage
 from lib.packages.AckPackage import AckPackage
 from lib.utils.logger import create_logger
 from lib.utils.enums import PackageType
-from threading import Thread, Event
-from typing import Optional
 import heapq
+
+from lib.packages.NackPackage import NackPackage
+from lib.utils.package_error import ChecksumErr, PackageErr
 
 
 @dataclass
@@ -19,8 +20,8 @@ class WindowItem:
     data: bytes
     acked: bool = False
     retries_left: int = 4  # una menos que max_retries
-    timer_thread: Optional[Thread] = None  ### NUEVO TIMER
-    stop_event: Optional[Event] = None  ### NUEVO TIMER
+    # timer_thread: Optional[Thread] = None  ### NUEVO TIMER
+    # stop_event: Optional[Event] = None  ### NUEVO TIMER
 
     def __lt__(self, other):  # para que funcione con heapq
         return self.sequence_number < other.sequence_number
@@ -42,6 +43,12 @@ class Window:
             return heapq.heappop(self.items)  # saca el de menor sequence_number
         else:
             raise Exception("No hay paquetes en la ventana para eliminar.")
+
+    def see_top(self) -> WindowItem:
+        if not self.items:
+            raise Exception
+        heapq.heapify(self.items)
+        return self.items[0]
 
 
 class SelectiveRepeatProtocol:
@@ -73,6 +80,14 @@ class SelectiveRepeatProtocol:
         self.sequence_number = 0
 
     # ---------------------------- SEND ---------------------------- #
+
+    def get_item(self, seq_number: int) -> WindowItem:
+        for item in self.window.items:
+            if item.sequence_number == seq_number:
+                return item
+        raise ValueError(
+            f"El paquete con seq_number {seq_number} no se encuentra en la ventana."
+        )
 
     def send(self, file: BufferedReader) -> None:
         finished = False
@@ -111,24 +126,27 @@ class SelectiveRepeatProtocol:
             self.last_sequence_number
         )
 
-        self._start_timer_for_item(item)  ### NUEVO TIMER
+        # self._start_timer_for_item(item)  ### NUEVO TIMER
 
     def _receive_ack(self) -> None:
         if self.tries >= self.max_tries:
             self.logger.error("Número máximo de reintentos alcanzado. Abortando.")
             raise Exception("Número máximo de reintentos alcanzado. Abortando.")
-
         # Espera la confirmación (ACK)
-        self.socket.settimeout(10)  # Timeout de 1 segundo
+        self.socket.settimeout(5000)  # Timeout de 1 segundo
         try:
             ack, _ = self.socket.recv()
+            if isinstance(ack, NackPackage):
+                self.nack_sequence_number = ack.sequence_number
+                raise TimeoutError
+
         except TimeoutError:
             self.logger.debug("Timeout esperando ACK")
 
-            # Es probable que el paquete se haya perdido, por lo tanto lo reenviamos
-            data_package = DataPackage(
-                self.window.items[0].data, self.first_sequence_number
-            )
+            item = self.get_item(self.nack_sequence_number)
+            data_package = DataPackage(item.data, self.nack_sequence_number)
+            self.logger.warning("RECIBIENDO ACK")
+            self.logger.warning(data_package)
             self._send_package(data_package)
             self.tries += 1
             return
@@ -139,41 +157,34 @@ class SelectiveRepeatProtocol:
 
         if not isinstance(ack, AckPackage):
             return
+        self.tries = 0
 
         self.logger.debug(
             f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
         )
 
-        for item in self.window.items:
-            if item.sequence_number == ack.sequence_number:
-                item.acked = True
-                if item.stop_event:  ### NUEVO TIMER
-                    item.stop_event.set()  ### NUEVO TIMER
-                break
-
-        if ack.sequence_number != self.first_sequence_number:
-            self.logger.debug(
-                f"ACK no coincide: {ack.sequence_number} != {self.first_sequence_number}"
-            )
-        else:
-            first_package = self.window.items[0]
-            if first_package.sequence_number < ack.sequence_number:
-                self.logger.warning(
-                    f"El servidor mando un paquete con seq_number {first_package.sequence_number} que no esta en la ventana"
-                )
-                # raise ValueError("El primer paquete no coincide con el ACK recibido")
+        if not self.from_stop_and_wait:
+            if (
+                ack.sequence_number > self.last_sequence_number
+                or ack.sequence_number < self.first_sequence_number
+            ):
+                self.logger.error("FUERA DE VENTANA CULOROTO")
                 return
 
-            self.window.items.remove(first_package)
-            self.first_sequence_number = self.obtener_proximo_seq_number(
-                self.first_sequence_number
-            )
+        item = self.get_item(ack.sequence_number)
+        if not item.acked:
+            item.acked = True
+        else:
+            self.logger.error("FUERA DE VENTANA CULOROTO 2")
 
-            if not self.from_stop_and_wait and self.window.length() > 0:
-                self._actualizar_window()
+        self._actualizar_window()
 
     def _actualizar_window(self) -> None:
-        first_package = self.window.items[0]
+        if self.window.length() == 0:
+            self.logger.warning("No hay paquetes en la ventana para actualizar.")
+            return
+
+        first_package = self.get_item(self.first_sequence_number)
 
         if first_package.acked:
             # caso en que llego en desorden algun paquete
@@ -181,7 +192,9 @@ class SelectiveRepeatProtocol:
             self.logger.warning(
                 f"Remuevo el paquete rezagado con seq_number {first_package.sequence_number} con ack true en la ventana"
             )
-            self.first_sequence_number += 1
+            self.first_sequence_number = self.obtener_proximo_seq_number(
+                self.first_sequence_number
+            )
             self._actualizar_window()
 
     # ---------------------------- RECEIVE ---------------------------- #
@@ -190,34 +203,53 @@ class SelectiveRepeatProtocol:
         finished = False
 
         while not finished:
-            package, _ = self.socket.recv()
-            if isinstance(package, DataPackage):
-                finished = self._receive_aux(package, file)
-            elif package.type == PackageType.FIN or package.data is None:
-                file.flush()
-                return
-            else:
-                self.logger.warning(f"Paquete inesperado recibido: {package}")
+            finished, seq_number = self._receive_data(file)
+            self._send_ack(seq_number)
 
-    def _receive_aux(self, package: DataPackage, file: BufferedWriter) -> bool:
-        # self.logger.debug(f"Recibiendo paquete type:{package.type.name}")
+    def _receive_data(self, file: BufferedWriter, retries=0) -> tuple[bool, int]:
+        if retries >= self.max_tries:
+            self.logger.error("Número máximo de reintentos alcanzado. Abortando.")
+            raise Exception("Número máximo de reintentos alcanzado. Abortando.")
+
+        package = None
+        try:
+            package, _ = self.socket.recv()
+        except (PackageErr, ChecksumErr, TimeoutError):
+            self.logger.error("Timeout esperando paquete")
+            self.tries += 1
+            self._send_nack(self.first_sequence_number)
+            self._receive_data(file, retries + 1)
+        except Exception as e:
+            self.logger.error(f"Error inesperado al recibir el paquete: {e}")
+            self.tries += 1
+            raise
+
+        if package is None:
+            return (False, 0)
+
+        if package.type == PackageType.FIN or package.data is None:
+            file.flush()
+            return (True, package.sequence_number)
 
         if not package.valid:
-            self.logger.warning(f"Paquete con checksum invalido: {package}")
-            ack_package = AckPackage(package.sequence_number, False)
+            ack_package = NackPackage(package.sequence_number)
             self.socket.sendto(ack_package, self.server_addr)
-            return False
+
+            return self._receive_data(file, retries + 1)
 
         if package.type != PackageType.DATA:
             raise Exception("El paquete recibido no es un DataPackage.")
 
         file.write(package.data)
+        return (False, package.sequence_number)
 
-        ack_package = AckPackage(self.sequence_number)  # type: ignore
-        # self.logger.debug(f"Enviando ACK con sequence number {self.sequence_number}")
+    def _send_ack(self, seq_number: int) -> None:
+        ack_package = AckPackage(seq_number)
         self.socket.sendto(ack_package, self.server_addr)
-        self.sequence_number += 1
-        return False
+
+    def _send_nack(self, seq_number: int) -> None:
+        nack_package = NackPackage(seq_number)
+        self.socket.sendto(nack_package, self.server_addr)
 
     # ---------------------------- SERVER ---------------------------- #
 
@@ -231,8 +263,8 @@ class SelectiveRepeatProtocol:
         for item in self.window.items:
             if item.sequence_number == seq_number:
                 item.acked = True
-                if item.stop_event:  ### NUEVO TIMER
-                    item.stop_event.set()  ### NUEVO TIMER
+                # if item.stop_event:  ### NUEVO TIMER
+                #     item.stop_event.set()  ### NUEVO TIMER
                 break
         else:
             self.logger.warning(
@@ -276,23 +308,23 @@ class SelectiveRepeatProtocol:
         return True
 
     ### NUEVO TIMER
-    def _start_timer_for_item(self, item: WindowItem) -> None:
-        stop_event = Event()
-        item.stop_event = stop_event  # Asignás igualmente si otro código lo necesita
+    # def _start_timer_for_item(self, item: WindowItem) -> None:
+    #     stop_event = Event()
+    #     item.stop_event = stop_event  # Asignás igualmente si otro código lo necesita
 
-        def timeout_func(local_stop_event=stop_event):  # Capturás el Event localmente
-            while not local_stop_event.wait(timeout=3):
-                if item.acked:
-                    return
-                self.logger.debug(
-                    f"Timeout para paquete {item.sequence_number}, reenviando."
-                )
-                item.retries_left -= 1
-                data_package = DataPackage(item.data, item.sequence_number)
-                self._send_package(data_package)
+    #     def timeout_func(local_stop_event=stop_event):  # Capturás el Event localmente
+    #         while not local_stop_event.wait(timeout=3):
+    #             if item.acked:
+    #                 return
+    #             self.logger.debug(
+    #                 f"Timeout para paquete {item.sequence_number}, reenviando."
+    #             )
+    #             item.retries_left -= 1
+    #             data_package = DataPackage(item.data, item.sequence_number)
+    #             self._send_package(data_package)
 
-        thread = Thread(target=timeout_func)
-        thread.daemon = True
-        thread.start()
+    #     thread = Thread(target=timeout_func)
+    #     thread.daemon = True
+    #     thread.start()
 
-        item.timer_thread = thread
+    #     item.timer_thread = thread
