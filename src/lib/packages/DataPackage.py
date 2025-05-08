@@ -26,7 +26,7 @@ class DataPackage(Package):
             raise ValueError("Data is not set")
         # Codifica como: DATA|<sequence_number>|<payload>
         checksum = self.get_checksum()
-        if random.randint(0, 100) < 10:
+        if random.randint(0, 100) < 20:
             checksum = 0
         return (
             f"{self.type.value}{SEPARATOR}{self.sequence_number}{SEPARATOR}{checksum}{SEPARATOR}".encode(

@@ -8,7 +8,6 @@ from lib.packages.DataPackage import DataPackage
 from lib.packages.AckPackage import AckPackage
 from lib.utils.logger import create_logger
 from lib.utils.enums import PackageType
-import heapq
 
 from lib.packages.NackPackage import NackPackage
 from lib.utils.package_error import ChecksumErr, PackageErr
@@ -19,12 +18,18 @@ class WindowItem:
     sequence_number: int
     data: bytes
     acked: bool = False
-    retries_left: int = 4  # una menos que max_retries
+    retries_left: int = 5  # una menos que max_retries
     # timer_thread: Optional[Thread] = None  ### NUEVO TIMER
     # stop_event: Optional[Event] = None  ### NUEVO TIMER
 
     def __lt__(self, other):  # para que funcione con heapq
         return self.sequence_number < other.sequence_number
+
+    def __repr__(self):
+        return f"WindowItem(seq_num={self.sequence_number}, acked={self.acked}, retries_left={self.retries_left})"
+
+    def __str__(self):
+        return f"WindowItem(seq_num={self.sequence_number}, acked={self.acked}, retries_left={self.retries_left})"
 
 
 class Window:
@@ -35,20 +40,35 @@ class Window:
     def length(self) -> int:
         return len(self.items)
 
+    # def add_item(self, item: WindowItem):
+    #     heapq.heappush(self.items, item)
+
     def add_item(self, item: WindowItem):
-        heapq.heappush(self.items, item)
+        for i, existing in enumerate(self.items):
+            if item.sequence_number < existing.sequence_number:
+                self.items.insert(i, item)
+                return
+        self.items.append(item)
 
     def remove_first_sent(self):
-        if self.items:
-            return heapq.heappop(self.items)  # saca el de menor sequence_number
-        else:
+        if not self.items:
             raise Exception("No hay paquetes en la ventana para eliminar.")
+        self.items.pop(0)
 
     def see_top(self) -> WindowItem:
         if not self.items:
-            raise Exception
-        heapq.heapify(self.items)
+            raise Exception("No hay paquetes en la ventana para ver.")
         return self.items[0]
+
+    def see_top_seq_num(self) -> int:
+        if not self.items:
+            raise Exception("No hay paquetes en la ventana para ver.")
+        return self.items[0].sequence_number
+
+    def see_last_seq_num(self) -> int:
+        if not self.items:
+            raise Exception("No hay paquetes en la ventana para ver.")
+        return self.items[-1].sequence_number
 
 
 class SelectiveRepeatProtocol:
@@ -120,7 +140,7 @@ class SelectiveRepeatProtocol:
             return seq_number + 1
 
     def agregar_paquete_al_window(self, package: DataPackage) -> None:
-        item = WindowItem(package.sequence_number, package.data)
+        item = WindowItem(package.sequence_number, package.data, acked=False)
         self.window.add_item(item)
         self.last_sequence_number = self.obtener_proximo_seq_number(
             self.last_sequence_number
@@ -252,6 +272,7 @@ class SelectiveRepeatProtocol:
         return (False, package.sequence_number)
 
     def _send_ack(self, seq_number: int) -> None:
+        self.logger.debug(f"Enviando ACK: {seq_number}")
         ack_package = AckPackage(seq_number)
         self.socket.sendto(ack_package, self.server_addr)
 
@@ -268,13 +289,11 @@ class SelectiveRepeatProtocol:
         self.agregar_paquete_al_window(data_package)
 
     def ack_received(self, seq_number: int) -> bool:
-        for item in self.window.items:
-            if item.sequence_number == seq_number:
-                item.acked = True
-                # if item.stop_event:  ### NUEVO TIMER
-                #     item.stop_event.set()  ### NUEVO TIMER
-                break
-        else:
+        self.logger.warning("Llego ACK de seq_num: " + str(seq_number))
+        try:
+            item = self.get_item(seq_number)
+            item.acked = True
+        except ValueError:
             self.logger.warning(
                 f"ACK recibido por paquete fuera de la ventana: {seq_number}"
             )
@@ -282,6 +301,7 @@ class SelectiveRepeatProtocol:
 
         # Avanzar la ventana si el primero fue ACKed
         while self.window.items and self.window.items[0].acked:
+            print(f"Estoy actualizando first_se de: {self.first_sequence_number}")
             self.window.remove_first_sent()
             self.first_sequence_number += 1
 
@@ -294,6 +314,7 @@ class SelectiveRepeatProtocol:
         return False
 
     def resend_package(self, seq_num: int) -> bool:
+        # self.logger.warning(f"Elementos en la window: {self.window.items}")
         for item in self.window.items:
             if item.sequence_number == seq_num:
                 if item.retries_left <= 0:
@@ -314,25 +335,3 @@ class SelectiveRepeatProtocol:
             )
             return False
         return True
-
-    ### NUEVO TIMER
-    # def _start_timer_for_item(self, item: WindowItem) -> None:
-    #     stop_event = Event()
-    #     item.stop_event = stop_event  # Asignás igualmente si otro código lo necesita
-
-    #     def timeout_func(local_stop_event=stop_event):  # Capturás el Event localmente
-    #         while not local_stop_event.wait(timeout=3):
-    #             if item.acked:
-    #                 return
-    #             self.logger.debug(
-    #                 f"Timeout para paquete {item.sequence_number}, reenviando."
-    #             )
-    #             item.retries_left -= 1
-    #             data_package = DataPackage(item.data, item.sequence_number)
-    #             self._send_package(data_package)
-
-    #     thread = Thread(target=timeout_func)
-    #     thread.daemon = True
-    #     thread.start()
-
-    #     item.timer_thread = thread

@@ -29,9 +29,8 @@ class ClientInfo:
     file: BufferedRandom | None = None
     seq_number: int = 0
     heap: list[DataPackage] = field(default_factory=list)  # = []
-    retries: dict[int, int] = field(
-        default_factory=dict
-    )  # dict[int, int] = {}  # {seq_num: retries_done}
+    retries: dict[int, int] = field(default_factory=dict)  # = {seq_num: retries_left}
+    first_window_sent: bool = False
 
 
 class ServerRequestHandler:
@@ -50,7 +49,6 @@ class ServerRequestHandler:
             "request-handler", "[REQUEST HANDLER]", logging_level
         )
         self.protocol = protocol
-        self.first_window_sent = False
 
     def handle_request(self, request: REQUEST):
         # self.logger.info(f"Handling request: {request}")
@@ -182,8 +180,8 @@ class ServerRequestHandler:
         if self.protocol.value == Protocol.STOP_WAIT.value:
             self.handle_download_request_stopnwait(package, client_info)
         elif self.protocol.value == Protocol.SELECTIVE_REPEAT.value:
-            if not self.first_window_sent:
-                self.first_window_sent = True
+            if not client_info.first_window_sent:
+                client_info.first_window_sent = True
                 self._send_first_window(client_info)
                 return
 
@@ -281,20 +279,23 @@ class ServerRequestHandler:
         if file is None:
             return
 
+        self.logger.debug(
+            f"Recibiendo ACK: {package.sequence_number}  - ({client_info.protocol.window.see_top_seq_num()} {client_info.protocol.window.see_last_seq_num()})"
+        )
+
         if isinstance(package, NackPackage):
-            self.logger.warning(f"Llego un NAK: {package}, por ahora lo ignoro")
-            # if not client_info.protocol.resend_package(package.sequence_number):
-            #     self.send_fin(client_info.addr)
+            self.logger.debug(f"Llego un NAK con seq_num {package.sequence_number}")
+            if not client_info.protocol.resend_package(package.sequence_number):
+                self.send_fin(client_info.addr)
             return
 
         # se chequea si ack esta dentro de la ventana, si no se ignora
         # ventana se avanza si el ack es el primero
         if not client_info.protocol.ack_received(package.sequence_number):
+            self.logger.debug(
+                f"ACK/NACK {package.sequence_number} fuera de ventana: ({client_info.protocol.first_sequence_number} {client_info.protocol.last_sequence_number})"
+            )
             return
-
-        self.logger.debug(
-            f"Recibiendo ACK: {package.sequence_number}  - ({client_info.protocol.first_sequence_number} {client_info.protocol.last_sequence_number})"
-        )
 
         # si ACK no es valido (NAK), hay que reenviar
         if not package.valid:
@@ -303,10 +304,10 @@ class ServerRequestHandler:
                 self.send_fin(client_info.addr)
             return
 
-        # si el ack no es el primero de la ventana, no avanzo vntana pero mando chunk
-        if not client_info.protocol.first_sequence_number > package.sequence_number:
+        # si el ack no es el primero de la ventana, no avanzo ventana pero mando chunk
+        if not client_info.protocol.window.see_top_seq_num() > package.sequence_number:
             self.logger.debug(
-                f"Llego ACK {package.sequence_number} antes que ACK {client_info.protocol.first_sequence_number}"
+                f"Llego ACK {package.sequence_number} antes que ACK {client_info.protocol.window.see_top_seq_num()}"
             )
 
         file = self._get_file_open(client_info)
@@ -351,4 +352,4 @@ class ServerRequestHandler:
                 return
 
             client_info.protocol.send_chunk(chunk)
-        self.first_window_sent = True
+        client_info.first_window_sent = True
