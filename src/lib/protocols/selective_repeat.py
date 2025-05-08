@@ -154,6 +154,7 @@ class SelectiveRepeatProtocol:
 
         if not isinstance(ack, AckPackage):
             return
+        self.tries = 0
 
         self.logger.debug(
             f"Recibiendo ACK: {ack.sequence_number}  - ({self.first_sequence_number} {self.last_sequence_number})"
