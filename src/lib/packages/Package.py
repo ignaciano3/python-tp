@@ -1,4 +1,3 @@
-import random
 from lib.utils.enums import PackageType
 from lib.utils.constants import BUFSIZE, SEPARATOR
 
@@ -26,11 +25,6 @@ class Package:
     def get_checksum(self) -> int:
         if self.data is None:
             return 0
-
-        # TODO: SACAR
-        if random.randint(0, 100) < 50:
-            self.data = b"corrupted_data"
-            self.valid = False
 
         return sum(self.data) % 256
 

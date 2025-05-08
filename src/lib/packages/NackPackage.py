@@ -5,7 +5,7 @@ from lib.packages.Package import Package
 
 class NackPackage(Package):
     def __init__(self, sequence_number: int = 0) -> None:
-        super().__init__(PackageType.NACK, valid=True, sequence_number=sequence_number)
+        super().__init__(PackageType.NACK, valid=False, sequence_number=sequence_number)
 
     def to_bytes(self) -> bytes:
         return f"{self.type.value}{SEPARATOR}{self.sequence_number}{SEPARATOR}{self.valid}".encode(

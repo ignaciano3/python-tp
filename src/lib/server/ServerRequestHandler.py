@@ -29,7 +29,6 @@ class ClientInfo:
     seq_number: int = 0
 
 
-
 class ServerRequestHandler:
     """
     Handles server requests and responses.
@@ -98,7 +97,9 @@ class ServerRequestHandler:
             self.handle_upload_request(package, client_info)
         elif isinstance(package, NackPackage):
             item = client_info.protocol.get_item(package.sequence_number)
-            self.socket.sendto(DataPackage(item.data, item.sequence_number), client_info.addr)
+            self.socket.sendto(
+                DataPackage(item.data, item.sequence_number), client_info.addr
+            )
         elif isinstance(package, AckPackage):
             if client_info.operation == "download":
                 try:
@@ -202,8 +203,7 @@ class ServerRequestHandler:
         # self.logger.info(f"ACK sent to {addr} with seq_num {seq_num}")
 
     def send_nack(self, addr: ADDR, seq_num: int = 0):
-        nack_package = AckPackage(seq_num)
-        nack_package.valid = False
+        nack_package = NackPackage(seq_num)
         self.socket.sendto(nack_package, addr)
         self.logger.info(f"NACK sent to {addr}")
 

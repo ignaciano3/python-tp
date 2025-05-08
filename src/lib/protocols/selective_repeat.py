@@ -13,7 +13,6 @@ from typing import Optional
 import heapq
 
 from lib.packages.NackPackage import NackPackage
-from lib.packages.Package import Package
 from lib.utils.package_error import ChecksumErr, PackageErr
 
 
@@ -85,7 +84,7 @@ class SelectiveRepeatProtocol:
         raise ValueError(
             f"El paquete con seq_number {seq_number} no se encuentra en la ventana."
         )
-    
+
     def send(self, file: BufferedReader) -> None:
         finished = False
         while not finished:
@@ -129,11 +128,13 @@ class SelectiveRepeatProtocol:
         if self.tries >= self.max_tries:
             self.logger.error("Número máximo de reintentos alcanzado. Abortando.")
             raise Exception("Número máximo de reintentos alcanzado. Abortando.")
-
         # Espera la confirmación (ACK)
         self.socket.settimeout(10)  # Timeout de 1 segundo
         try:
             ack, _ = self.socket.recv()
+            if isinstance(ack, NackPackage):
+                raise TimeoutError
+
         except TimeoutError:
             self.logger.debug("Timeout esperando ACK")
 
@@ -141,6 +142,8 @@ class SelectiveRepeatProtocol:
             data_package = DataPackage(
                 self.window.items[0].data, self.first_sequence_number
             )
+            self.logger.warning("RECIBIENDO ACK")
+            self.logger.warning(data_package)
             self._send_package(data_package)
             self.tries += 1
             return
@@ -205,8 +208,8 @@ class SelectiveRepeatProtocol:
         while not finished:
             finished, seq_number = self._receive_data(file)
             self._send_ack(seq_number)
-    
-    def _receive_data(self, file: BufferedWriter, retries = 0) -> tuple[bool, int]:
+
+    def _receive_data(self, file: BufferedWriter, retries=0) -> tuple[bool, int]:
         if retries >= self.max_tries:
             self.logger.error("Número máximo de reintentos alcanzado. Abortando.")
             raise Exception("Número máximo de reintentos alcanzado. Abortando.")
@@ -223,33 +226,34 @@ class SelectiveRepeatProtocol:
             self.logger.error(f"Error inesperado al recibir el paquete: {e}")
             self.tries += 1
             raise
-        
+
         if package is None:
             return (False, 0)
-        
+
         if package.type == PackageType.FIN or package.data is None:
             file.flush()
             return (True, package.sequence_number)
-        
+
         if not package.valid:
             ack_package = NackPackage(package.sequence_number)
             self.socket.sendto(ack_package, self.server_addr)
 
             return self._receive_data(file, retries + 1)
-        
+
         if package.type != PackageType.DATA:
             raise Exception("El paquete recibido no es un DataPackage.")
-        
+
         file.write(package.data)
         return (False, package.sequence_number)
 
     def _send_ack(self, seq_number: int) -> None:
         ack_package = AckPackage(seq_number)
         self.socket.sendto(ack_package, self.server_addr)
-    
+
     def _send_nack(self, seq_number: int) -> None:
         nack_package = NackPackage(seq_number)
         self.socket.sendto(nack_package, self.server_addr)
+
     # ---------------------------- SERVER ---------------------------- #
 
     def send_chunk(self, chunk: bytes) -> None:
