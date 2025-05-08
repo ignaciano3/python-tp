@@ -2,7 +2,6 @@ from lib.packages.Package import Package
 from lib.utils.enums import PackageType
 from lib.utils.constants import SEPARATOR
 from lib.utils.package_error import PackageErr
-import random
 
 
 class DataPackage(Package):
@@ -26,8 +25,8 @@ class DataPackage(Package):
             raise ValueError("Data is not set")
         # Codifica como: DATA|<sequence_number>|<payload>
         checksum = self.get_checksum()
-        if random.randint(0, 100) < 20:
-            checksum = 0
+        # if random.randint(0, 100) < 20:
+        #     checksum = 0
         return (
             f"{self.type.value}{SEPARATOR}{self.sequence_number}{SEPARATOR}{checksum}{SEPARATOR}".encode(
                 "utf-8"
